@@ -34,3 +34,5 @@ jobs:
           scripts/draw-portrait --blocks-only "$RUNNER_TEMP/nova" --blocks 16
           grep -q '^idle:' "$RUNNER_TEMP/nova/ascii.yaml"
           grep -q '^  close:' "$RUNNER_TEMP/nova/ascii.yaml"
+          scripts/draw-portrait --blocks-only "$RUNNER_TEMP/nova" --blocks 16 --blocks-mode quadrant --blocks-name footer.yaml --blocks-states idle
+          grep -q '^idle:' "$RUNNER_TEMP/nova/footer.yaml"

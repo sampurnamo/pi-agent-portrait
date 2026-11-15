@@ -156,7 +156,10 @@ For the most faithful likeness, first ask an image tool for one pixel-art portra
 draw-portrait --name forge --blocks 32          # 32 by 16 instead of 24 by 12
 draw-portrait --blocks-only emotes/nova         # block art for a set that is already drawn
 draw-portrait --name forge --blocks 0           # skip it
+draw-portrait --blocks-only emotes/nova --blocks 32 --blocks-mode quadrant --blocks-name footer.yaml --blocks-states idle,hi
 ```
+
+`--blocks-mode quadrant` puts 2 by 2 pixels in each character (the quadrant block glyphs, with the best two-colour split of each cell): about twice the horizontal detail at the same size, as long as the font has those glyphs. `--blocks-name` and `--blocks-states` write a smaller file with only some states, for a status-line face, say.
 
 The block art is made from the PNG frames, so it needs no image model. Frame names follow the files: `idle.png` is `default`, `idle_blink.png` is `blink`, and extra takes (`_v2`) are included.
 

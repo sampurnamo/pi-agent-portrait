@@ -248,7 +248,7 @@ def cut(sheet_path, dst, layout="30"):
         im.crop((left, top, left + side, top + side)).resize((128, 128), Image.LANCZOS).save(os.path.join(dst, f))
 
 
-def block_lines(path, px):
+def half_block_lines(path, px):
     """One frame as half-block text: 24-bit colour, two stacked pixels per cell (the top one as the
     foreground of an upper half block, the bottom one as its background). Transparent pixels stay
     the terminal's own background."""
@@ -277,6 +277,45 @@ def block_lines(path, px):
     return lines
 
 
+QUADRANTS = " ▘▝▀▖▌▞▛▗▚▐▜▄▙▟█"  # index: which of top-left, top-right, bottom-left, bottom-right (bits 1, 2, 4, 8) are foreground
+
+
+def quadrant_lines(path, px):
+    """Like half_block_lines, but 2 by 2 pixels per cell with the best two-colour split of each cell: twice the
+    horizontal detail at the same size. shortcut: transparent pixels are drawn over a dark background here."""
+    im = Image.open(path).convert("RGBA")
+    base = Image.new("RGBA", im.size, (20, 20, 28, 255))
+    base.alpha_composite(im)
+    pix = base.convert("RGB").resize((px * 2, px), Image.LANCZOS).load()
+
+    def mean(colours):
+        return tuple(sum(c[i] for c in colours) // len(colours) for i in range(3))
+
+    lines = []
+    for cy in range(0, px, 2):
+        out, last = [], None
+        for cx in range(0, px * 2, 2):
+            cell = [pix[cx, cy], pix[cx + 1, cy], pix[cx, cy + 1], pix[cx + 1, cy + 1]]
+            best = None
+            for m in range(15):  # 15 (all foreground) looks the same as 0 (all background)
+                fg = [c for i, c in enumerate(cell) if m >> i & 1]
+                bg = [c for i, c in enumerate(cell) if not m >> i & 1]
+                mf, mb = (mean(fg) if fg else None), mean(bg)
+                err = sum(sum((a - b) ** 2 for a, b in zip(c, mf if m >> i & 1 else mb)) for i, c in enumerate(cell))
+                if best is None or err < best[0]:
+                    best = (err, m, mf, mb)
+            _, m, mf, mb = best
+            code = "\x1b[48;2;%d;%d;%dm" % mb if m == 0 else "\x1b[38;2;%d;%d;%dm\x1b[48;2;%d;%d;%dm" % (*mf, *mb)
+            out.append(QUADRANTS[m] if code == last else code + QUADRANTS[m])
+            last = code
+        lines.append("".join(out) + "\x1b[0m")
+    return lines
+
+
+def block_lines(path, px, mode="half"):
+    return (quadrant_lines if mode == "quadrant" else half_block_lines)(path, px)
+
+
 def block_key(state, stem):
     """The frame name the ASCII renderer looks a frame up by: idle.png is "default", idle_blink.png is "blink"."""
     if stem == state:
@@ -284,7 +323,7 @@ def block_key(state, stem):
     return stem[len(state) + 1:] if stem.startswith(state + "_") else stem
 
 
-def write_blocks(set_dir, px, name="ascii.yaml"):
+def write_blocks(set_dir, px, name="ascii.yaml", mode="half", states=None):
     """Write <set>/<name> (ascii.yaml unless told otherwise) from the set's PNG frames, for terminals that cannot show images."""
     if px < 8 or px % 2:
         sys.exit("--blocks must be an even number, 8 or more")
@@ -292,12 +331,12 @@ def write_blocks(set_dir, px, name="ascii.yaml"):
     n = 0
     for state in sorted(d for d in os.listdir(set_dir) if os.path.isdir(os.path.join(set_dir, d))):
         frames = sorted(f for f in os.listdir(os.path.join(set_dir, state)) if f.endswith(".png"))
-        if not frames:
+        if not frames or (states and state not in states):
             continue
         out.append(f"{state}:")
         for f in frames:
             out.append(f"  {block_key(state, f[:-4])}:")
-            out += ['    - "' + line.replace("\x1b", "\\x1b") + '"' for line in block_lines(os.path.join(set_dir, state, f), px)]
+            out += ['    - "' + line.replace("\x1b", "\\x1b") + '"' for line in block_lines(os.path.join(set_dir, state, f), px, mode)]
             n += 1
         out.append("")
     path = os.path.join(set_dir, name)
@@ -335,11 +374,17 @@ def main():
     p.add_argument("--blocks-only", metavar="SET_DIR",
                    help="write ascii.yaml for a set that is already drawn, then stop")
     p.add_argument("--blocks-name", default="ascii.yaml", metavar="FILE",
-                   help="with --blocks-only: the file to write (default ascii.yaml), e.g. a smaller footer.yaml")
+                   help="with --blocks-only: the file to write (default ascii.yaml), e.g. a footer.yaml")
+    p.add_argument("--blocks-states", metavar="LIST",
+                   help="with --blocks-only: only these states, comma separated (e.g. idle,hi for a footer face)")
+    p.add_argument("--blocks-mode", choices=["half", "quadrant"], default="half",
+                   help="half: two stacked pixels per character (default); quadrant: 2 by 2 pixels per character,"
+                        " about twice the horizontal detail at the same size (needs a font with the quadrant block glyphs)")
     a = p.parse_args()
 
     if a.blocks_only:
-        return write_blocks(a.blocks_only, a.blocks or 24, a.blocks_name)
+        return write_blocks(a.blocks_only, a.blocks or 24, a.blocks_name, a.blocks_mode,
+                            set(a.blocks_states.split(",")) if a.blocks_states else None)
     if a.print_guide:
         return labelled_sheet(*a.print_guide)
     if a.print_reference:
@@ -434,7 +479,7 @@ Do not copy take 1's poses, and ignore the poses in the first image too: use the
         if not keep:
             shutil.rmtree(work, ignore_errors=True)
     if a.blocks:
-        write_blocks(dst, a.blocks)
+        write_blocks(dst, a.blocks, mode=a.blocks_mode)
     config_path = os.path.join(a.dest, "config.json")
     config = json.load(open(config_path)) if os.path.isfile(config_path) else {}
     config["emotes"] = [{"model": "*", "emote-set": a.name}]
