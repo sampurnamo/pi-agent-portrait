@@ -38,7 +38,7 @@ try:
 except ImportError:  # Windows has no fcntl: two runs on one destination are not serialised there
     fcntl = None
 
-from PIL import Image
+from PIL import Image, ImageFilter, ImageOps
 import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
@@ -248,11 +248,23 @@ def cut(sheet_path, dst, layout="30"):
         im.crop((left, top, left + side, top + side)).resize((128, 128), Image.LANCZOS).save(os.path.join(dst, f))
 
 
-def half_block_lines(path, px):
+def enhance(im):
+    """For linework (a pencil sketch) that goes soft when shrunk to a few dozen cells: crop to the head and
+    shoulders, stretch the contrast and sharpen. Keeps the alpha channel."""
+    w, h = im.size
+    im = im.convert("RGBA").crop((int(w * .08), int(h * .02), int(w * .92), int(h * .86))).resize((w, h), Image.LANCZOS)
+    rgb = ImageOps.autocontrast(im.convert("RGB")).filter(ImageFilter.UnsharpMask(radius=2, percent=150, threshold=3))
+    out = rgb.convert("RGBA")
+    out.putalpha(im.getchannel("A"))
+    return out
+
+
+def half_block_lines(path, px, sharpen=False):
     """One frame as half-block text: 24-bit colour, two stacked pixels per cell (the top one as the
     foreground of an upper half block, the bottom one as its background). Transparent pixels stay
     the terminal's own background."""
-    pix = Image.open(path).convert("RGBA").resize((px, px), Image.LANCZOS).load()
+    im = Image.open(path).convert("RGBA")
+    pix = (enhance(im) if sharpen else im).resize((px, px), Image.LANCZOS).load()
 
     def at(x, y):
         r, g, b, alpha = pix[x, y]
@@ -280,10 +292,12 @@ def half_block_lines(path, px):
 QUADRANTS = " ▘▝▀▖▌▞▛▗▚▐▜▄▙▟█"  # index: which of top-left, top-right, bottom-left, bottom-right (bits 1, 2, 4, 8) are foreground
 
 
-def quadrant_lines(path, px):
+def quadrant_lines(path, px, sharpen=False):
     """Like half_block_lines, but 2 by 2 pixels per cell with the best two-colour split of each cell: twice the
     horizontal detail at the same size. shortcut: transparent pixels are drawn over a dark background here."""
     im = Image.open(path).convert("RGBA")
+    if sharpen:
+        im = enhance(im)
     base = Image.new("RGBA", im.size, (20, 20, 28, 255))
     base.alpha_composite(im)
     pix = base.convert("RGB").resize((px * 2, px), Image.LANCZOS).load()
@@ -312,8 +326,8 @@ def quadrant_lines(path, px):
     return lines
 
 
-def block_lines(path, px, mode="half"):
-    return (quadrant_lines if mode == "quadrant" else half_block_lines)(path, px)
+def block_lines(path, px, mode="half", sharpen=False):
+    return (quadrant_lines if mode == "quadrant" else half_block_lines)(path, px, sharpen)
 
 
 def block_key(state, stem):
@@ -323,7 +337,7 @@ def block_key(state, stem):
     return stem[len(state) + 1:] if stem.startswith(state + "_") else stem
 
 
-def write_blocks(set_dir, px, name="ascii.yaml", mode="half", states=None):
+def write_blocks(set_dir, px, name="ascii.yaml", mode="half", states=None, sharpen=False):
     """Write <set>/<name> (ascii.yaml unless told otherwise) from the set's PNG frames, for terminals that cannot show images."""
     if px < 8 or px % 2:
         sys.exit("--blocks must be an even number, 8 or more")
@@ -336,7 +350,7 @@ def write_blocks(set_dir, px, name="ascii.yaml", mode="half", states=None):
         out.append(f"{state}:")
         for f in frames:
             out.append(f"  {block_key(state, f[:-4])}:")
-            out += ['    - "' + line.replace("\x1b", "\\x1b") + '"' for line in block_lines(os.path.join(set_dir, state, f), px, mode)]
+            out += ['    - "' + line.replace("\x1b", "\\x1b") + '"' for line in block_lines(os.path.join(set_dir, state, f), px, mode, sharpen)]
             n += 1
         out.append("")
     path = os.path.join(set_dir, name)
@@ -360,6 +374,9 @@ def main():
                         " as file_vN.png; the set itself is the reference, so the character stays the same")
     p.add_argument("--direction", default="",
                    help="extra art direction, e.g. how the character gestures")
+    p.add_argument("--style", metavar="TEXT",
+                   help="draw in this art style instead of the default set's pixel art, e.g."
+                        " 'a pencil and ink portrait sketch on warm paper'; the first image then only guides the grid and the poses")
     p.add_argument("--photo-style", action="store_true",
                    help="draw in the photo's realistic style instead of the default set's")
     p.add_argument("--print-prompt", action="store_true")
@@ -377,6 +394,9 @@ def main():
                    help="with --blocks-only: the file to write (default ascii.yaml), e.g. a footer.yaml")
     p.add_argument("--blocks-states", metavar="LIST",
                    help="with --blocks-only: only these states, comma separated (e.g. idle,hi for a footer face)")
+    p.add_argument("--blocks-sharpen", action="store_true",
+                   help="crop to the head and shoulders and sharpen before making block art: for pencil-sketch sets,"
+                        " whose fine lines go soft at a few dozen cells")
     p.add_argument("--blocks-mode", choices=["half", "quadrant"], default="half",
                    help="half: two stacked pixels per character (default); quadrant: 2 by 2 pixels per character,"
                         " about twice the horizontal detail at the same size (needs a font with the quadrant block glyphs)")
@@ -384,7 +404,7 @@ def main():
 
     if a.blocks_only:
         return write_blocks(a.blocks_only, a.blocks or 24, a.blocks_name, a.blocks_mode,
-                            set(a.blocks_states.split(",")) if a.blocks_states else None)
+                            set(a.blocks_states.split(",")) if a.blocks_states else None, a.blocks_sharpen)
     if a.print_guide:
         return labelled_sheet(*a.print_guide)
     if a.print_reference:
@@ -400,6 +420,10 @@ def main():
     if a.direction:
         prompt += ("\n\nExtra direction, which overrides the generic pose descriptions above while keeping"
                    " what each cell means (blink, wave, talk, think, read, type, phone, fail, tidy): " + a.direction)
+    if a.style:
+        prompt += ("\n\nArt style, which overrides the pixel-art style named above: " + a.style + ". Use the first image only as a guide to"
+                   " the 6 by 5 grid, the head-and-shoulders framing and the order of poses. Do not copy its pixel-art look, its anime"
+                   " proportions or its colours; keep the character identical in every cell.")
     existing = os.path.join(a.dest, "emotes", a.name)
     if a.variant is not None:
         if a.variant < 2:
@@ -479,7 +503,7 @@ Do not copy take 1's poses, and ignore the poses in the first image too: use the
         if not keep:
             shutil.rmtree(work, ignore_errors=True)
     if a.blocks:
-        write_blocks(dst, a.blocks, mode=a.blocks_mode)
+        write_blocks(dst, a.blocks, mode=a.blocks_mode, sharpen=a.blocks_sharpen)
     config_path = os.path.join(a.dest, "config.json")
     config = json.load(open(config_path)) if os.path.isfile(config_path) else {}
     config["emotes"] = [{"model": "*", "emote-set": a.name}]

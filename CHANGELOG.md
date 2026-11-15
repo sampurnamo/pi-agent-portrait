@@ -7,6 +7,8 @@ All notable changes to pi-agent-portrait, and to pi-emote before it, are documen
 ### Added
 - **Block art for terminals without images**: `draw-portrait` writes an `ascii.yaml` of half-block text (24-bit colour, 24 by 12 by default) from the frames it cuts, so terminals with no image protocol show the character's own face instead of the generic ASCII robot. `--blocks N` sets the size, `--blocks 0` skips it, and `--blocks-only SET_DIR` converts a set that is already drawn. `--blocks-mode quadrant` uses quadrant block characters for about twice the horizontal detail; `--blocks-name` and `--blocks-states` write a smaller file with only some states.
 
+- **`--style TEXT`** draws in another art style than the default pixel art (for example a pencil sketch), keeping the reference sheet only as a guide to the grid and the poses. **`--blocks-sharpen`** crops and sharpens before block art is made, for linework that goes soft when shrunk.
+
 ### Changed
 - The text portrait canvas is at least 8 by 4 and takes the size of the frame when it is bigger; the info lines are centered beside a taller portrait.
 

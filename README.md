@@ -142,6 +142,16 @@ Each cell keeps its meaning (wave, talk, think, read and so on) whatever the dir
 
 For the most faithful likeness, first ask an image tool for one pixel-art portrait of the person from their photo, then pass that portrait as `--photo` with `--photo-style`. The default set's anime look otherwise makes adults look younger. Only draw people who are fine with it.
 
+### Another art style
+
+The default sheet is pixel art in an anime style, which makes adult characters look young. `--style` overrides it: the first image then only guides the grid, the framing and the order of poses.
+
+```bash
+draw-portrait --name forge --style "a pencil and ink portrait sketch on warm cream paper, natural adult proportions, soft cross-hatched shading, not anime, not pixel art" \n  --blocks 36 --blocks-mode quadrant --blocks-sharpen
+```
+
+Fine linework goes soft when it is shrunk to a few dozen cells. `--blocks-sharpen` crops to the head and shoulders, stretches the contrast and sharpens before the block art is made; a bigger `--blocks` (36 or 40 in quadrant mode) helps too. Leave it off for pixel art, which survives shrinking.
+
 ### More takes
 
 `draw-portrait --name <name> --variant 2` draws the same character again in 30 different poses (a salute instead of a wave, binoculars instead of a magnifying glass) and adds them as `<frame>_v2.png`. Take 1's sheet is the character reference, so face, clothes and details stay the same. Each time a state starts the portrait picks one take at random and keeps it until the state ends. Use 3, 4 and so on for more. oana's two takes:
