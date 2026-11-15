@@ -12,6 +12,7 @@ All notable changes to pi-agent-portrait, and to pi-emote before it, are documen
 
 ### Fixed
 - `draw-portrait` runs on Windows: `fcntl` is optional there (two runs on one destination are not serialised), and the Codex CLI is found when npm installed it as `codex.cmd`.
+- `draw-portrait` on Windows works with the Codex backend: its work folder is made with a plain `mkdir`, because `tempfile.mkdtemp` (Python 3.12+) makes an owner-only folder there and the sheet the Codex sandbox writes into it could not be read back. A run that fails after the image model has drawn a sheet now keeps that sheet and says where, so `--sheet` can still install it.
 
 ## v0.4.0
 

@@ -284,8 +284,8 @@ def block_key(state, stem):
     return stem[len(state) + 1:] if stem.startswith(state + "_") else stem
 
 
-def write_blocks(set_dir, px):
-    """Write <set>/ascii.yaml from the set's PNG frames, for terminals that cannot show images."""
+def write_blocks(set_dir, px, name="ascii.yaml"):
+    """Write <set>/<name> (ascii.yaml unless told otherwise) from the set's PNG frames, for terminals that cannot show images."""
     if px < 8 or px % 2:
         sys.exit("--blocks must be an even number, 8 or more")
     out = [f"# Block art made by draw-portrait: {px} columns by {px // 2} rows, 24-bit colour.", ""]
@@ -300,7 +300,7 @@ def write_blocks(set_dir, px):
             out += ['    - "' + line.replace("\x1b", "\\x1b") + '"' for line in block_lines(os.path.join(set_dir, state, f), px)]
             n += 1
         out.append("")
-    path = os.path.join(set_dir, "ascii.yaml")
+    path = os.path.join(set_dir, name)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write("\n".join(out))
     print(f"block art ready: {path} ({n} frames, {px} columns by {px // 2} rows)")
@@ -334,10 +334,12 @@ def main():
                         " in terminals with no image protocol (default 24, 0 turns it off)")
     p.add_argument("--blocks-only", metavar="SET_DIR",
                    help="write ascii.yaml for a set that is already drawn, then stop")
+    p.add_argument("--blocks-name", default="ascii.yaml", metavar="FILE",
+                   help="with --blocks-only: the file to write (default ascii.yaml), e.g. a smaller footer.yaml")
     a = p.parse_args()
 
     if a.blocks_only:
-        return write_blocks(a.blocks_only, a.blocks or 24)
+        return write_blocks(a.blocks_only, a.blocks or 24, a.blocks_name)
     if a.print_guide:
         return labelled_sheet(*a.print_guide)
     if a.print_reference:
@@ -387,7 +389,11 @@ Do not copy take 1's poses, and ignore the poses in the first image too: use the
     lock = open(os.path.join(a.dest, ".lock"), "w")
     if fcntl:
         fcntl.flock(lock, fcntl.LOCK_EX)
-    work = tempfile.mkdtemp(prefix=".work-", dir=a.dest)
+    # Not tempfile.mkdtemp: on Windows (Python 3.12+) it makes an owner-only folder, and the Codex sandbox's files inside
+    # it then cannot be read by you. A plain mkdir inherits the destination's permissions.
+    work = os.path.join(a.dest, ".work-" + os.urandom(4).hex())
+    os.mkdir(work)
+    keep = False
     try:
         sheet = os.path.join(work, "sheet.png")
         if a.sheet:
@@ -417,8 +423,16 @@ Do not copy take 1's poses, and ignore the poses in the first image too: use the
             if os.path.isdir(dst):
                 os.rename(dst, os.path.join(work, "old"))
             os.rename(new, dst)
+    except BaseException:
+        # A sheet the image model already drew cost something: keep it, so --sheet can still install it.
+        drawn = os.path.join(work, "sheet.png")
+        if os.path.isfile(drawn) and os.path.getsize(drawn) > 0:
+            keep = True
+            print(f"the drawn sheet is kept at {drawn}; install it with --sheet", file=sys.stderr)
+        raise
     finally:
-        shutil.rmtree(work, ignore_errors=True)
+        if not keep:
+            shutil.rmtree(work, ignore_errors=True)
     if a.blocks:
         write_blocks(dst, a.blocks)
     config_path = os.path.join(a.dest, "config.json")
