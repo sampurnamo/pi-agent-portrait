@@ -33,7 +33,7 @@ Start pi and the `default` character appears next to the model and token usage (
 
 ![nova fixing a bug in pi, then /portrait forge](docs/demo.gif)
 
-It draws real images in Kitty, Ghostty, iTerm2 and WezTerm, also inside tmux (see [Multiplexers](#multiplexers)). Other terminals get an ASCII face.
+It draws real images in Kitty, Ghostty, iTerm2 and WezTerm, also inside tmux (see [Multiplexers](#multiplexers)). Other terminals, such as Windows Terminal, get the set's [block art](#block-art-for-terminals-without-images) if it has any, otherwise an ASCII face.
 
 ## Quick start: draw your own agent
 
@@ -147,6 +147,18 @@ For the most faithful likeness, first ask an image tool for one pixel-art portra
 `draw-portrait --name <name> --variant 2` draws the same character again in 30 different poses (a salute instead of a wave, binoculars instead of a magnifying glass) and adds them as `<frame>_v2.png`. Take 1's sheet is the character reference, so face, clothes and details stay the same. Each time a state starts the portrait picks one take at random and keeps it until the state ends. Use 3, 4 and so on for more. oana's two takes:
 
 <img src="docs/how/4-takes.png" width="760" alt="oana's first and second take for eight states: same face, different poses">
+
+### Block art for terminals without images
+
+`draw-portrait` also writes `ascii.yaml` next to the frames: every frame as half-block text, two stacked pixels per character in 24-bit colour, 24 columns by 12 rows by default. A terminal that cannot show images (Windows Terminal, a plain SSH session, a multiplexer without passthrough) then shows the face itself instead of the generic robot, and the portrait grows to fit the frame.
+
+```bash
+draw-portrait --name forge --blocks 32          # 32 by 16 instead of 24 by 12
+draw-portrait --blocks-only emotes/nova         # block art for a set that is already drawn
+draw-portrait --name forge --blocks 0           # skip it
+```
+
+The block art is made from the PNG frames, so it needs no image model. Frame names follow the files: `idle.png` is `default`, `idle_blink.png` is `blink`, and extra takes (`_v2`) are included.
 
 ### Without the script
 

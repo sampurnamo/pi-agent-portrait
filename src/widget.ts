@@ -4,6 +4,7 @@ import type { Animator } from "./animator.js";
 import type { RenderedFrame } from "./renderer.js";
 import { log } from "./log.js";
 import { resolveProgressColor } from "./theme.js";
+import { textCanvas } from "./canvas.js";
 
 // --- Token formatting ---
 
@@ -203,34 +204,29 @@ function renderITermFrame(frame: RenderedFrame & { kind: "image" }, width: numbe
   return lines;
 }
 
-const TEXT_CANVAS_COLS = 8;
-const TEXT_CANVAS_ROWS = 4;
-
 function renderTextFrame(frame: RenderedFrame & { kind: "text" }, width: number, _config: Config, infoLines: string[], separatorColor: (s: string) => string): string[] {
   const sep = separatorColor("│");
   const leftMargin = " ";
-  const avatarPad = " ".repeat(TEXT_CANVAS_COLS);
+  // The canvas is 8×4 at least; a bigger frame (block art) sets its own size.
+  const { cols, rows } = textCanvas(frame.lines, visibleWidth);
+  const avatarPad = " ".repeat(cols);
 
-  // Fixed 8×4 canvas, vertically center the frame lines.
+  // Vertically center the frame lines, and the info lines when the canvas is taller than they are.
   const emoteLines = frame.lines;
-  const rowCount = Math.max(TEXT_CANVAS_ROWS, infoLines.length);
+  const rowCount = Math.max(rows, infoLines.length);
   const emoteStart = Math.floor((rowCount - emoteLines.length) / 2);
+  const infoStart = Math.floor((rowCount - infoLines.length) / 2);
   const lines: string[] = [];
 
   for (let i = 0; i < rowCount; i++) {
     const emoteIdx = i - emoteStart;
     const emote = (emoteIdx >= 0 && emoteIdx < emoteLines.length) ? emoteLines[emoteIdx] : "";
-    const emoteWidth = visibleWidth(emote);
-    // Warn if a line exceeds the canvas width
-    if (emoteWidth > TEXT_CANVAS_COLS) {
-      log(`AsciiRenderer: line ${emoteIdx} exceeds ${TEXT_CANVAS_COLS} cols (${emoteWidth})`);
-    }
     // Center within canvas
-    const totalPad = TEXT_CANVAS_COLS - emoteWidth;
+    const totalPad = cols - visibleWidth(emote);
     const padLeft = totalPad > 0 ? " ".repeat(Math.floor(totalPad / 2)) : "";
     const padRight = totalPad > 0 ? " ".repeat(Math.ceil(totalPad / 2)) : "";
     const cell = emote ? `${padLeft}${emote}${padRight}` : avatarPad;
-    lines.push(`${leftMargin}${cell} ${sep} ${infoLines[i] ?? ""}`);
+    lines.push(`${leftMargin}${cell} ${sep} ${infoLines[i - infoStart] ?? ""}`);
   }
 
   return lines;
@@ -285,7 +281,7 @@ export function createWidgetFactory(deps: WidgetDeps) {
         const borderColor = colorStyler(config.theme.border ?? "thinking-level-color", thinkingStyler, theme);
         const separatorColor = colorStyler(config.theme["vertical-separator"] ?? "thinking-level-color", thinkingStyler, theme);
         const border = borderColor("─".repeat(width));
-        const avatarWidth = frame.kind === "text" ? TEXT_CANVAS_COLS : config.size;
+        const avatarWidth = frame.kind === "text" ? textCanvas(frame.lines, visibleWidth).cols : config.size;
         const infoLines = buildInfoLines(width, avatarWidth, deps.getCtxRef(), deps.pi, theme, config);
 
         const lines: string[] = [];

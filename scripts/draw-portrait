@@ -17,6 +17,11 @@ usage:
   draw-portrait --name NAME --sheet my-sheet.png [--dest DIR]
   draw-portrait --print-prompt --name NAME --role "..."   (for ChatGPT etc.)
   draw-portrait --print-reference out.png                 (the sheet to attach)
+  draw-portrait --blocks-only emotes/nova [--blocks 24]   (block art for a set already drawn)
+
+After drawing, an ascii.yaml of half-block text (24 columns by 12 rows, 24-bit colour) is written
+next to the PNG frames, so terminals with no image protocol, such as Windows Terminal, show the
+face too. --blocks N changes the size; --blocks 0 skips it.
 
 --dest is the pi-emote config folder, default ./.pi/extensions/pi-emote.
 
@@ -27,7 +32,11 @@ Backends:
   auto   codex when it is installed, else azure; azure is also tried when
          codex fails and the Azure variables are set
 """
-import argparse, base64, fcntl, json, os, re, shutil, subprocess, sys, tempfile, urllib.request
+import argparse, base64, json, os, re, shutil, subprocess, sys, tempfile, urllib.request
+try:
+    import fcntl
+except ImportError:  # Windows has no fcntl: two runs on one destination are not serialised there
+    fcntl = None
 
 from PIL import Image
 import numpy as np
@@ -160,7 +169,8 @@ def reference_sheet(path, template=None):
 def draw_codex(work, prompt, photo):
     images = ["-i", "ref.png"] + (["-i", "photo.png"] if photo else [])
     note = ", photo.png is the person to draw" if photo else ""
-    subprocess.run(["codex", "exec", "--skip-git-repo-check", "-s", "workspace-write", *images, "-"],
+    # which(): on Windows npm installs codex as codex.cmd, which subprocess cannot start by its bare name
+    subprocess.run([shutil.which("codex") or "codex", "exec", "--skip-git-repo-check", "-s", "workspace-write", *images, "-"],
                    input=CODEX_ASK.format(prompt=prompt, photo_note=note), text=True, cwd=work, check=True,
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=900)
     if not os.path.isfile(os.path.join(work, "sheet.png")):
@@ -238,6 +248,64 @@ def cut(sheet_path, dst, layout="30"):
         im.crop((left, top, left + side, top + side)).resize((128, 128), Image.LANCZOS).save(os.path.join(dst, f))
 
 
+def block_lines(path, px):
+    """One frame as half-block text: 24-bit colour, two stacked pixels per cell (the top one as the
+    foreground of an upper half block, the bottom one as its background). Transparent pixels stay
+    the terminal's own background."""
+    pix = Image.open(path).convert("RGBA").resize((px, px), Image.LANCZOS).load()
+
+    def at(x, y):
+        r, g, b, alpha = pix[x, y]
+        return (r, g, b) if alpha >= 128 else None
+
+    lines = []
+    for y in range(0, px, 2):
+        out, last = [], None
+        for x in range(px):
+            top, bot = at(x, y), at(x, y + 1)
+            if top is None and bot is None:
+                code, ch = "\x1b[0m", " "
+            elif bot is None:
+                code, ch = "\x1b[49;38;2;%d;%d;%dm" % top, "▀"
+            elif top is None:
+                code, ch = "\x1b[49;38;2;%d;%d;%dm" % bot, "▄"
+            else:
+                code, ch = "\x1b[38;2;%d;%d;%dm\x1b[48;2;%d;%d;%dm" % (*top, *bot), "▀"
+            out.append(ch if code == last else code + ch)
+            last = code
+        lines.append("".join(out) + "\x1b[0m")
+    return lines
+
+
+def block_key(state, stem):
+    """The frame name the ASCII renderer looks a frame up by: idle.png is "default", idle_blink.png is "blink"."""
+    if stem == state:
+        return "default"
+    return stem[len(state) + 1:] if stem.startswith(state + "_") else stem
+
+
+def write_blocks(set_dir, px):
+    """Write <set>/ascii.yaml from the set's PNG frames, for terminals that cannot show images."""
+    if px < 8 or px % 2:
+        sys.exit("--blocks must be an even number, 8 or more")
+    out = [f"# Block art made by draw-portrait: {px} columns by {px // 2} rows, 24-bit colour.", ""]
+    n = 0
+    for state in sorted(d for d in os.listdir(set_dir) if os.path.isdir(os.path.join(set_dir, d))):
+        frames = sorted(f for f in os.listdir(os.path.join(set_dir, state)) if f.endswith(".png"))
+        if not frames:
+            continue
+        out.append(f"{state}:")
+        for f in frames:
+            out.append(f"  {block_key(state, f[:-4])}:")
+            out += ['    - "' + line.replace("\x1b", "\\x1b") + '"' for line in block_lines(os.path.join(set_dir, state, f), px)]
+            n += 1
+        out.append("")
+    path = os.path.join(set_dir, "ascii.yaml")
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write("\n".join(out))
+    print(f"block art ready: {path} ({n} frames, {px} columns by {px // 2} rows)")
+
+
 def main():
     p = argparse.ArgumentParser(description="Draw a portrait set for a pi agent.")
     p.add_argument("--name")
@@ -261,8 +329,15 @@ def main():
                    help="use a finished 30-frame set as the pose reference instead of the default set")
     p.add_argument("--print-guide", nargs=2, metavar=("SET_DIR", "PNG"),
                    help="save a labelled sheet of a 30-frame set, one state name per cell")
+    p.add_argument("--blocks", type=int, default=24, metavar="N",
+                   help="also write ascii.yaml: every frame as N columns by N/2 rows of half-block text, shown"
+                        " in terminals with no image protocol (default 24, 0 turns it off)")
+    p.add_argument("--blocks-only", metavar="SET_DIR",
+                   help="write ascii.yaml for a set that is already drawn, then stop")
     a = p.parse_args()
 
+    if a.blocks_only:
+        return write_blocks(a.blocks_only, a.blocks or 24)
     if a.print_guide:
         return labelled_sheet(*a.print_guide)
     if a.print_reference:
@@ -310,7 +385,8 @@ Do not copy take 1's poses, and ignore the poses in the first image too: use the
     os.makedirs(emotes, exist_ok=True)
     # One drawing per destination at a time; a second run waits.
     lock = open(os.path.join(a.dest, ".lock"), "w")
-    fcntl.flock(lock, fcntl.LOCK_EX)
+    if fcntl:
+        fcntl.flock(lock, fcntl.LOCK_EX)
     work = tempfile.mkdtemp(prefix=".work-", dir=a.dest)
     try:
         sheet = os.path.join(work, "sheet.png")
@@ -343,6 +419,8 @@ Do not copy take 1's poses, and ignore the poses in the first image too: use the
             os.rename(new, dst)
     finally:
         shutil.rmtree(work, ignore_errors=True)
+    if a.blocks:
+        write_blocks(dst, a.blocks)
     config_path = os.path.join(a.dest, "config.json")
     config = json.load(open(config_path)) if os.path.isfile(config_path) else {}
     config["emotes"] = [{"model": "*", "emote-set": a.name}]

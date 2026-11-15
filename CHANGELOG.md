@@ -2,6 +2,17 @@
 
 All notable changes to pi-agent-portrait, and to pi-emote before it, are documented in this file.
 
+## Unreleased
+
+### Added
+- **Block art for terminals without images**: `draw-portrait` writes an `ascii.yaml` of half-block text (24-bit colour, 24 by 12 by default) from the frames it cuts, so terminals with no image protocol show the character's own face instead of the generic ASCII robot. `--blocks N` sets the size, `--blocks 0` skips it, and `--blocks-only SET_DIR` converts a set that is already drawn.
+
+### Changed
+- The text portrait canvas is at least 8 by 4 and takes the size of the frame when it is bigger; the info lines are centered beside a taller portrait.
+
+### Fixed
+- `draw-portrait` runs on Windows: `fcntl` is optional there (two runs on one destination are not serialised), and the Codex CLI is found when npm installed it as `codex.cmd`.
+
 ## v0.4.0
 
 First release as pi-agent-portrait, a fork of [pi-emote](https://github.com/cgxeiji/pi-emote) by @cgxeiji.
