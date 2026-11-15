@@ -152,6 +152,8 @@ draw-portrait --name forge --style "a pencil and ink portrait sketch on warm cre
 
 Fine linework goes soft when it is shrunk to a few dozen cells. `--blocks-sharpen` crops to the head and shoulders, stretches the contrast and sharpens before the block art is made; a bigger `--blocks` (36 or 40 in quadrant mode) helps too. Leave it off for pixel art, which survives shrinking.
 
+A sketch on light paper looks like a bright card in a dark terminal; `--blocks-vignette` fades the paper into the dark at the edges, so the face sits on the terminal's own background.
+
 ### More takes
 
 `draw-portrait --name <name> --variant 2` draws the same character again in 30 different poses (a salute instead of a wave, binoculars instead of a magnifying glass) and adds them as `<frame>_v2.png`. Take 1's sheet is the character reference, so face, clothes and details stay the same. Each time a state starts the portrait picks one take at random and keeps it until the state ends. Use 3, 4 and so on for more. oana's two takes:

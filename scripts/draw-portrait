@@ -259,12 +259,32 @@ def enhance(im):
     return out
 
 
-def half_block_lines(path, px, sharpen=False):
+def vignette_dark(im):
+    """Fade the paper around a sketch into the dark of a terminal, so the face sits on the dark and not on a bright card.
+    Keeps the alpha channel."""
+    rgba = im.convert("RGBA")
+    w, h = rgba.size
+    yy, xx = np.mgrid[0:h, 0:w]
+    d = np.hypot((xx - w / 2) / (w / 2), (yy - h / 2) / (h / 2))
+    t = np.clip((d - .70) / .30, 0, 1)
+    t = (t * t * (3 - 2 * t))[..., None]  # smoothstep
+    rgb = np.asarray(rgba.convert("RGB"), dtype=float)
+    faded = rgb * (1 - t) + np.array((20, 20, 28), dtype=float) * t
+    out = Image.fromarray(faded.astype("uint8"), "RGB").convert("RGBA")
+    out.putalpha(rgba.getchannel("A"))
+    return out
+
+
+def half_block_lines(path, px, sharpen=False, vignette=False):
     """One frame as half-block text: 24-bit colour, two stacked pixels per cell (the top one as the
     foreground of an upper half block, the bottom one as its background). Transparent pixels stay
     the terminal's own background."""
     im = Image.open(path).convert("RGBA")
-    pix = (enhance(im) if sharpen else im).resize((px, px), Image.LANCZOS).load()
+    if sharpen:
+        im = enhance(im)
+    if vignette:
+        im = vignette_dark(im)
+    pix = im.resize((px, px), Image.LANCZOS).load()
 
     def at(x, y):
         r, g, b, alpha = pix[x, y]
@@ -292,12 +312,14 @@ def half_block_lines(path, px, sharpen=False):
 QUADRANTS = " ▘▝▀▖▌▞▛▗▚▐▜▄▙▟█"  # index: which of top-left, top-right, bottom-left, bottom-right (bits 1, 2, 4, 8) are foreground
 
 
-def quadrant_lines(path, px, sharpen=False):
+def quadrant_lines(path, px, sharpen=False, vignette=False):
     """Like half_block_lines, but 2 by 2 pixels per cell with the best two-colour split of each cell: twice the
     horizontal detail at the same size. shortcut: transparent pixels are drawn over a dark background here."""
     im = Image.open(path).convert("RGBA")
     if sharpen:
         im = enhance(im)
+    if vignette:
+        im = vignette_dark(im)
     base = Image.new("RGBA", im.size, (20, 20, 28, 255))
     base.alpha_composite(im)
     pix = base.convert("RGB").resize((px * 2, px), Image.LANCZOS).load()
@@ -326,8 +348,8 @@ def quadrant_lines(path, px, sharpen=False):
     return lines
 
 
-def block_lines(path, px, mode="half", sharpen=False):
-    return (quadrant_lines if mode == "quadrant" else half_block_lines)(path, px, sharpen)
+def block_lines(path, px, mode="half", sharpen=False, vignette=False):
+    return (quadrant_lines if mode == "quadrant" else half_block_lines)(path, px, sharpen, vignette)
 
 
 def block_key(state, stem):
@@ -337,7 +359,7 @@ def block_key(state, stem):
     return stem[len(state) + 1:] if stem.startswith(state + "_") else stem
 
 
-def write_blocks(set_dir, px, name="ascii.yaml", mode="half", states=None, sharpen=False):
+def write_blocks(set_dir, px, name="ascii.yaml", mode="half", states=None, sharpen=False, vignette=False):
     """Write <set>/<name> (ascii.yaml unless told otherwise) from the set's PNG frames, for terminals that cannot show images."""
     if px < 8 or px % 2:
         sys.exit("--blocks must be an even number, 8 or more")
@@ -350,7 +372,7 @@ def write_blocks(set_dir, px, name="ascii.yaml", mode="half", states=None, sharp
         out.append(f"{state}:")
         for f in frames:
             out.append(f"  {block_key(state, f[:-4])}:")
-            out += ['    - "' + line.replace("\x1b", "\\x1b") + '"' for line in block_lines(os.path.join(set_dir, state, f), px, mode, sharpen)]
+            out += ['    - "' + line.replace("\x1b", "\\x1b") + '"' for line in block_lines(os.path.join(set_dir, state, f), px, mode, sharpen, vignette)]
             n += 1
         out.append("")
     path = os.path.join(set_dir, name)
@@ -394,6 +416,9 @@ def main():
                    help="with --blocks-only: the file to write (default ascii.yaml), e.g. a footer.yaml")
     p.add_argument("--blocks-states", metavar="LIST",
                    help="with --blocks-only: only these states, comma separated (e.g. idle,hi for a footer face)")
+    p.add_argument("--blocks-vignette", action="store_true",
+                   help="fade a sketch's paper into a dark background at the edges, so the face sits on the terminal's dark"
+                        " and not on a bright card (for sketch sets on light paper)")
     p.add_argument("--blocks-sharpen", action="store_true",
                    help="crop to the head and shoulders and sharpen before making block art: for pencil-sketch sets,"
                         " whose fine lines go soft at a few dozen cells")
@@ -404,7 +429,7 @@ def main():
 
     if a.blocks_only:
         return write_blocks(a.blocks_only, a.blocks or 24, a.blocks_name, a.blocks_mode,
-                            set(a.blocks_states.split(",")) if a.blocks_states else None, a.blocks_sharpen)
+                            set(a.blocks_states.split(",")) if a.blocks_states else None, a.blocks_sharpen, a.blocks_vignette)
     if a.print_guide:
         return labelled_sheet(*a.print_guide)
     if a.print_reference:
@@ -503,7 +528,7 @@ Do not copy take 1's poses, and ignore the poses in the first image too: use the
         if not keep:
             shutil.rmtree(work, ignore_errors=True)
     if a.blocks:
-        write_blocks(dst, a.blocks, mode=a.blocks_mode, sharpen=a.blocks_sharpen)
+        write_blocks(dst, a.blocks, mode=a.blocks_mode, sharpen=a.blocks_sharpen, vignette=a.blocks_vignette)
     config_path = os.path.join(a.dest, "config.json")
     config = json.load(open(config_path)) if os.path.isfile(config_path) else {}
     config["emotes"] = [{"model": "*", "emote-set": a.name}]
