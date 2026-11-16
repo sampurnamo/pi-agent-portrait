@@ -1,4 +1,4 @@
-import { visibleWidth, truncateToWidth } from "@earendil-works/pi-tui";
+import { visibleWidth, truncateToWidth, getCellDimensions } from "@earendil-works/pi-tui";
 import type { Config, WidgetColor } from "./types.js";
 import type { Animator } from "./animator.js";
 import type { RenderedFrame } from "./renderer.js";
@@ -6,7 +6,7 @@ import { log } from "./log.js";
 import { resolveProgressColor } from "./theme.js";
 import { textCanvas } from "./canvas.js";
 import type { Space } from "./mood.js";
-import { repaintMark } from "./sixel.js";
+import { repaintMark, boardLayout, boardPart } from "./sixel.js";
 
 // --- Token formatting ---
 
@@ -64,7 +64,7 @@ function colorStyler(color: WidgetColor, thinking: (s: string) => string, theme:
   return (s: string) => theme.fg(color, s);
 }
 
-function buildInfoLines(width: number, avatarWidth: number, ctxRef: any, pi: any, theme: any, config: any, space?: Space | null): string[] {
+function buildInfoLines(width: number, avatarWidth: number, ctxRef: any, pi: any, theme: any, config: any, space?: Space | null, boardReserve = 0): string[] {
   const lines: string[] = [];
   if (!ctxRef) return lines;
 
@@ -131,7 +131,7 @@ function buildInfoLines(width: number, avatarWidth: number, ctxRef: any, pi: any
   }
   lines.push(pwd);
 
-  const infoWidth = width - avatarWidth - 5;
+  const infoWidth = width - avatarWidth - 5 - boardReserve;   // the mood board, when shown, takes the right edge
 
   const thinkingStyler = theme.getThinkingBorderColor?.(thinkingLevel)
     ?? ((s: string) => theme.fg("border", s));
@@ -191,13 +191,13 @@ function renderKittyFrame(frame: RenderedFrame & { kind: "image" }, width: numbe
  *
  * Layout: frame.rows total (frame.rows-1 text rows + 1 image row).
  */
-function renderITermFrame(frame: RenderedFrame & { kind: "image" }, width: number, config: Config, infoLines: string[], separatorColor: (s: string) => string): string[] {
+function renderITermFrame(frame: RenderedFrame & { kind: "image" }, width: number, config: Config, infoLines: string[], separatorColor: (s: string) => string, board?: { part: string; key: string }): string[] {
   const sep = separatorColor("│");
   const size = frame.cols ?? config.size;
   const skipPad = `\x1b[${1 + size}C`;
-  // Sixel: any change to the frame or to a row must rewrite the whole block (see repaintMark in sixel.ts), or a clear of
-  // one row alone would cut a band out of the picture.
-  const repaint = frame.repaint === undefined ? "" : repaintMark(frame.repaint, infoLines);
+  // Sixel: any change to the frame, to a row or to the mood board must rewrite the whole block (see repaintMark in
+  // sixel.ts), or a clear of one row alone would cut a band out of a picture.
+  const repaint = frame.repaint === undefined ? "" : repaintMark(frame.repaint, board ? [...infoLines, board.key] : infoLines);
   const lines: string[] = [];
 
   for (let i = 0; i < frame.rows; i++) {
@@ -208,7 +208,8 @@ function renderITermFrame(frame: RenderedFrame & { kind: "image" }, width: numbe
       // Last row: cursor-up to first text row, place image, then text
       // After the image, cursor returns to this row (last image row, col 0).
       const up = frame.rows > 1 ? `\x1b[${frame.rows - 1}A` : "";
-      lines.push(`${up}\x1b[1C${frame.sequence} ${sep} ${infoLines[i] ?? ""}${repaint}`);
+      // The mood board, when there is one, is drawn after the text, last of all, at the right edge.
+      lines.push(`${up}\x1b[1C${frame.sequence} ${sep} ${infoLines[i] ?? ""}${repaint}${board?.part ?? ""}`);
     }
   }
 
@@ -295,14 +296,19 @@ export function createWidgetFactory(deps: WidgetDeps) {
         const separatorColor = colorStyler(config.theme["vertical-separator"] ?? "thinking-level-color", thinkingStyler, theme);
         const border = borderColor("─".repeat(width));
         const avatarWidth = frame.kind === "text" ? textCanvas(frame.lines, visibleWidth).cols : (frame.kind === "image" && frame.cols) || config.size;
-        const infoLines = buildInfoLines(width, avatarWidth, deps.getCtxRef(), deps.pi, theme, config, deps.getSpace?.());
+        // Her mood board (a fixed-size thumbnail of her latest pin) goes at the right edge, in a Sixel portrait only, and
+        // only when the terminal is wide enough to leave the info rows their room.
+        const space = deps.getSpace?.();
+        const layout = frame.kind === "image" && frame.cols && space?.board ? boardLayout(width, avatarWidth, space.board, getCellDimensions()) : null;
+        const board = layout && space?.board ? { part: boardPart((frame as { rows: number }).rows, layout.startCol, space.board.sixel), key: space.board.key } : undefined;
+        const infoLines = buildInfoLines(width, avatarWidth, deps.getCtxRef(), deps.pi, theme, config, space, layout?.reserve ?? 0);
 
         const lines: string[] = [];
         lines.push(border);
 
         if (frame.kind === "image") {
           if (frame.cursorAdvances) {
-            lines.push(...renderITermFrame(frame, width, config, infoLines, separatorColor));
+            lines.push(...renderITermFrame(frame, width, config, infoLines, separatorColor, board));
           } else {
             lines.push(...renderKittyFrame(frame, width, config, infoLines, separatorColor));
           }

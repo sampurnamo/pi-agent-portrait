@@ -262,6 +262,7 @@ Set `PI_PORTRAIT_SPACE` to a folder the agent (or you) writes to, and the widget
 |------|----------|
 | `mood.txt` | `feeling ...` (accent colour while the file is under 3 hours old, dim after) |
 | `pins.jsonl` | `on her wall: ...`, the `note` (else the `file`) of the last line |
+| `board.sixel` + `board.json` | A fixed-size thumbnail tile at the right edge of a Sixel widget (width, height and source pin in `board.json`), pre-encoded as Sixel, shown while the files stay the same; hidden when the terminal is under about 100 columns |
 | `face.txt` | An emote state (`success`, `hi`, `think`, ...) worn while resting instead of the idle frame, while the mood is fresh |
 
 The folder is polled every 5 seconds. Without the variable, a `space` folder with a `mood.txt` inside the folder pi was started in is used. With neither, nothing changes.

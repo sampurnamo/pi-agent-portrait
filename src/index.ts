@@ -269,11 +269,11 @@ export default function (pi: ExtensionAPI) {
     spaceDir = process.env.PI_PORTRAIT_SPACE ?? (existsSync(join(cwd, "space", "mood.txt")) ? join(cwd, "space") : undefined);
     log(`space: dir=${spaceDir ?? "none"}`);
     if (spaceDir) {
-      space = readSpace(spaceDir);
+      space = readSpace(spaceDir, Date.now(), space);
       spaceSig = spaceKey(space);
       if (spaceTimer) clearInterval(spaceTimer);
       spaceTimer = setInterval(() => {
-        const next = readSpace(spaceDir);
+        const next = readSpace(spaceDir, Date.now(), space);
         if (spaceKey(next) === spaceSig) return;
         space = next;
         spaceSig = spaceKey(next);

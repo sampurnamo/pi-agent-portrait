@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { sixelGeometry, sixelLine, sixelWanted, repaintMark, IMAGE_LINE_MARKER } from "../src/sixel.ts";
+import { sixelGeometry, sixelLine, sixelWanted, repaintMark, boardLayout, boardPart, BOARD_MIN_INFO, IMAGE_LINE_MARKER } from "../src/sixel.ts";
 
 test("the image covers whole cells, rounded up, from the terminal's own cell size", () => {
   assert.deepEqual(sixelGeometry(200, 200, { widthPx: 10, heightPx: 20 }), { cols: 20, rows: 10 });
@@ -27,6 +27,22 @@ test("the repaint mark changes with the frame or with any row, is stable otherwi
   assert.notEqual(a, repaintMark(2, rows));                                     // a new frame
   assert.notEqual(a, repaintMark(1, ["feeling warm", "Sonnet", "$0.001"]));     // one row changed alone
   assert.ok(!a.startsWith("\x1b_G") && a.endsWith("\x1b\\"));                   // an APC that is not a Kitty command
+});
+
+test("the mood board sits at the right edge, and only when the info rows keep their room", () => {
+  const cell = { widthPx: 10, heightPx: 20 };
+  const tile = { width: 400, height: 200 };
+  assert.deepEqual(boardLayout(120, 20, tile, cell), { cols: 40, rows: 10, reserve: 42, startCol: 79 });
+  assert.equal(boardLayout(120, 20, tile, cell)!.startCol + 40, 119);          // one cell from the edge
+  assert.ok(120 - 20 - 5 - 42 >= BOARD_MIN_INFO);                              // 53 cells left for the info rows
+  assert.equal(boardLayout(100, 20, tile, cell), null);                        // 100 - 20 - 5 - 42 = 33: too narrow, no board
+  assert.equal(boardLayout(101, 20, tile, cell), null);
+  assert.notEqual(boardLayout(103, 20, tile, cell), null);                     // 36 cells: just enough
+});
+
+test("the board part backs up to the first row, goes to the tile's column and draws it", () => {
+  assert.equal(boardPart(10, 79, "SIXEL"), "\x1b[9A\r\x1b[79CSIXEL");
+  assert.equal(boardPart(1, 5, "S"), "\x1b[0A\r\x1b[5CS");
 });
 
 test("Sixel is for a plain Windows Terminal tab with a sixel.json, and the variable overrides", () => {

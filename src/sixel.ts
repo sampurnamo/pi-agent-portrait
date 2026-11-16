@@ -45,6 +45,29 @@ export function sixelGeometry(widthPx: number, heightPx: number, cell: Cell): { 
   };
 }
 
+/** The info rows keep at least this many cells; a narrower terminal gets no mood board. */
+export const BOARD_MIN_INFO = 36;
+
+/**
+ * The mood board tile (a fixed-size thumbnail, see mood.ts) at the right edge of the widget: how many cells it covers, how
+ * much width the info rows give up for it, and the column it starts at. null when the terminal is too narrow to leave the
+ * info rows BOARD_MIN_INFO cells after the portrait and the tile.
+ */
+export function boardLayout(width: number, avatarCols: number, board: { width: number; height: number }, cell: Cell) {
+  const { cols, rows } = sixelGeometry(board.width, board.height, cell);
+  const reserve = cols + 2;                                  // the tile and a gap of two cells before it
+  if (width - avatarCols - 5 - reserve < BOARD_MIN_INFO) return null;
+  return { cols, rows, reserve, startCol: width - cols - 1 };  // right-aligned, one cell from the edge
+}
+
+/**
+ * Appended to the widget's last row, where the cursor is after the portrait and the info text: back up to the first row,
+ * out to the tile's column, and draw it. Like the portrait it is drawn last, so the clears of the rows above never touch it.
+ */
+export function boardPart(widgetRows: number, startCol: number, sixel: string): string {
+  return `\x1b[${Math.max(0, widgetRows - 1)}A\r\x1b[${startCol}C${sixel}`;
+}
+
 /** The text of one image line: marker, the Sixel, then the cursor moved right past the image and its 1-cell margin. */
 export function sixelLine(sequence: string, cols: number): string {
   return `${IMAGE_LINE_MARKER}${sequence}\x1b[${cols + 1}C`;
