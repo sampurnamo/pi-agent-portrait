@@ -6,7 +6,7 @@ import { log } from "./log.js";
 import { resolveProgressColor } from "./theme.js";
 import { textCanvas } from "./canvas.js";
 import type { Space } from "./mood.js";
-import { repaintMark, boardLayout, boardPart } from "./sixel.js";
+import { repaintMark, boardLayout, boardPart, SAVE_CURSOR } from "./sixel.js";
 
 // --- Token formatting ---
 
@@ -208,8 +208,10 @@ function renderITermFrame(frame: RenderedFrame & { kind: "image" }, width: numbe
       // Last row: cursor-up to first text row, place image, then text
       // After the image, cursor returns to this row (last image row, col 0).
       const up = frame.rows > 1 ? `\x1b[${frame.rows - 1}A` : "";
+      // Sixel: remember this row first; the Sixel line restores it after each picture (see sixelLine in sixel.ts).
+      const save = frame.repaint === undefined ? "" : SAVE_CURSOR;
       // The mood board, when there is one, is drawn after the text, last of all, at the right edge.
-      lines.push(`${up}\x1b[1C${frame.sequence} ${sep} ${infoLines[i] ?? ""}${repaint}${board?.part ?? ""}`);
+      lines.push(`${save}${up}\x1b[1C${frame.sequence} ${sep} ${infoLines[i] ?? ""}${repaint}${board?.part ?? ""}`);
     }
   }
 

@@ -61,16 +61,26 @@ export function boardLayout(width: number, avatarCols: number, board: { width: n
 }
 
 /**
- * Appended to the widget's last row, where the cursor is after the portrait and the info text: back up to the first row,
- * out to the tile's column, and draw it. Like the portrait it is drawn last, so the clears of the rows above never touch it.
+ * Appended to the widget's last row after the info text: restore the saved cursor (the last row, column 0), back up to the
+ * first row, out to the tile's column, draw it, and restore the cursor again so the line ends where it began. Like the
+ * portrait it is drawn last, so the clears of the rows above never touch it.
  */
 export function boardPart(widgetRows: number, startCol: number, sixel: string): string {
-  return `\x1b[${Math.max(0, widgetRows - 1)}A\r\x1b[${startCol}C${sixel}`;
+  return `${RESTORE_CURSOR}\x1b[${Math.max(0, widgetRows - 1)}A\x1b[${startCol}C${sixel}${RESTORE_CURSOR}`;
 }
 
-/** The text of one image line: marker, the Sixel, then the cursor moved right past the image and its 1-cell margin. */
+/** Save and restore cursor (DECSC, DECRC); pi-tui itself does not use them. */
+export const SAVE_CURSOR = "\x1b7";
+export const RESTORE_CURSOR = "\x1b8";
+
+/**
+ * The text of one image line: marker, the Sixel, the cursor restored to where the widget saved it (its last row, before the
+ * cursor-up), then moved right past the image and its 1-cell margin. Restoring, not trusting where the terminal leaves the
+ * cursor after a Sixel, keeps the picture, the text after it and the mood board on the same rows even when the rows pi
+ * reserves differ from the rows the picture covers (a wrong cell-size guess), and leaves the cursor where pi-tui expects it.
+ */
 export function sixelLine(sequence: string, cols: number): string {
-  return `${IMAGE_LINE_MARKER}${sequence}\x1b[${cols + 1}C`;
+  return `${IMAGE_LINE_MARKER}${sequence}${RESTORE_CURSOR}\x1b[${cols + 1}C`;
 }
 
 /**

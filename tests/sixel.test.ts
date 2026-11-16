@@ -11,7 +11,7 @@ test("the image covers whole cells, rounded up, from the terminal's own cell siz
 test("the line is marked as an image line, and the cursor moves past the image and its margin", () => {
   const line = sixelLine("\x1bP0;1;0q#0;2;0;0;0~\x1b\\", 20);
   assert.ok(line.startsWith(IMAGE_LINE_MARKER));
-  assert.ok(line.endsWith("\x1b[21C"));
+  assert.ok(line.endsWith("\x1b8\x1b[21C"));                                   // restore the saved cursor, then past the image
   assert.ok(line.includes("\x1bP0;1;0q"));
 });
 
@@ -41,8 +41,8 @@ test("the mood board sits at the right edge, and only when the info rows keep th
 });
 
 test("the board part backs up to the first row, goes to the tile's column and draws it", () => {
-  assert.equal(boardPart(10, 79, "SIXEL"), "\x1b[9A\r\x1b[79CSIXEL");
-  assert.equal(boardPart(1, 5, "S"), "\x1b[0A\r\x1b[5CS");
+  assert.equal(boardPart(10, 79, "SIXEL"), "\x1b8\x1b[9A\x1b[79CSIXEL\x1b8");   // restore, up 9, right 79, draw, restore
+  assert.equal(boardPart(1, 5, "S"), "\x1b8\x1b[0A\x1b[5CS\x1b8");
 });
 
 test("Sixel is for a plain Windows Terminal tab with a sixel.json, and the variable overrides", () => {
