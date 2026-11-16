@@ -264,6 +264,8 @@ Set `PI_PORTRAIT_SPACE` to a folder the agent (or you) writes to, and the widget
 |------|----------|
 | `mood.txt` | `feeling ...` (accent colour while the file is under 3 hours old, dim after) |
 | `pins.jsonl` | `on her wall: ...`, the `note` (else the `file`) of the last line |
+| `reflection.json` | `reflecting (label)` and up to two lines of her words, below the model, context and folder rows so a short portrait cuts these first (accent colour while under 12 hours old, dim after). `{"at": local ISO time, "label", "text"}` |
+| `note.txt` | `note: ...`, one line she leaves for him, below the reflection |
 | `board.sixel` + `board.json` | A fixed-size tile (a thumbnail or a collage) at the right edge of a Sixel widget (width, height and source pin in `board.json`), pre-encoded as Sixel, shown while the files stay the same; hidden when the terminal is under about 100 columns |
 | `face.txt` | An emote state (`success`, `hi`, `think`, ...) worn while resting instead of the idle frame, while the mood is fresh |
 

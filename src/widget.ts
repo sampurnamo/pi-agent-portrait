@@ -5,7 +5,7 @@ import type { RenderedFrame } from "./renderer.js";
 import { log } from "./log.js";
 import { resolveProgressColor } from "./theme.js";
 import { textCanvas } from "./canvas.js";
-import type { Space } from "./mood.js";
+import { wrapWords, type Space } from "./mood.js";
 import { repaintMark, boardLayout, boardPart, SAVE_CURSOR } from "./sixel.js";
 
 // --- Token formatting ---
@@ -151,7 +151,16 @@ function buildInfoLines(width: number, avatarWidth: number, ctxRef: any, pi: any
   const extra: string[] = [];
   if (space?.mood) extra.push(theme.fg(space.mood.fresh ? "accent" : "dim", fit(`feeling ${space.mood.text}`)));
   if (space?.wall) extra.push(theme.fg("dim", fit(`on her wall: ${space.wall}`)));
-  return [...extra, ...styled];
+  // Her answer to a pause and her note to him go BELOW the core rows: the portrait's height varies, and only these optional rows may
+  // be cut when it is short, never the model, context, tokens or folder.
+  const below: string[] = [];
+  if (space?.reflecting) {
+    const r = space.reflecting;
+    below.push(theme.fg(r.fresh ? "accent" : "dim", fit(`reflecting (${r.label})`)));
+    for (const l of wrapWords(r.text, Math.max(10, infoWidth - 2), 2)) below.push(theme.fg(r.fresh ? "text" : "dim", `  ${l}`));
+  }
+  if (space?.note) below.push(theme.fg("dim", fit(`note: ${space.note}`)));
+  return [...extra, ...styled, ...below];
 }
 
 // --- Render helpers ---
