@@ -69,6 +69,16 @@ export function boardPart(widgetRows: number, startCol: number, sixel: string): 
   return `${RESTORE_CURSOR}\x1b[${Math.max(0, widgetRows - 1)}A\x1b[${startCol}C${sixel}${RESTORE_CURSOR}`;
 }
 
+/**
+ * The info rows centred beside a picture that is taller than they are (blank rows above and below in equal parts, the extra one
+ * below), so the text sits at the picture's middle and not against its top. Never cut: more rows than the picture covers are
+ * kept from the top, as before, and the widget shows what fits.
+ */
+export function centreRows(infoLines: string[], pictureRows: number): string[] {
+  const start = Math.max(0, Math.floor((pictureRows - infoLines.length) / 2));
+  return [...Array(start).fill(""), ...infoLines];
+}
+
 /** Save and restore cursor (DECSC, DECRC); pi-tui itself does not use them. */
 export const SAVE_CURSOR = "\x1b7";
 export const RESTORE_CURSOR = "\x1b8";

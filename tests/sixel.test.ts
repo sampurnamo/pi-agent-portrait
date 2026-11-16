@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { sixelGeometry, sixelLine, sixelWanted, repaintMark, boardLayout, boardPart, BOARD_MIN_INFO, IMAGE_LINE_MARKER } from "../src/sixel.ts";
+import { sixelGeometry, sixelLine, sixelWanted, repaintMark, boardLayout, boardPart, centreRows, BOARD_MIN_INFO, IMAGE_LINE_MARKER } from "../src/sixel.ts";
 
 test("the image covers whole cells, rounded up, from the terminal's own cell size", () => {
   assert.deepEqual(sixelGeometry(200, 200, { widthPx: 10, heightPx: 20 }), { cols: 20, rows: 10 });
@@ -54,4 +54,12 @@ test("Sixel is for a plain Windows Terminal tab with a sixel.json, and the varia
   assert.equal(sixelWanted({ ...wt, PI_PORTRAIT_SIXEL: "0" }, true), false);
   assert.equal(sixelWanted({ PI_PORTRAIT_SIXEL: "1", TMUX: "x" }, true), true);
   assert.equal(sixelWanted({ PI_PORTRAIT_SIXEL: "1" }, false), false);      // forcing still needs the file
+});
+
+test("the info rows are centred beside a taller picture, and kept whole beside a shorter one", () => {
+  assert.deepEqual(centreRows(["a", "b", "c"], 9), ["", "", "", "a", "b", "c"]);       // 3 blank rows above, 3 below (the picture's last rows hold nothing)
+  assert.deepEqual(centreRows(["a", "b", "c", "d"], 9), ["", "", "a", "b", "c", "d"]);  // the extra blank row falls below
+  assert.deepEqual(centreRows(["a", "b"], 2), ["a", "b"]);
+  assert.deepEqual(centreRows(["a", "b", "c"], 2), ["a", "b", "c"]);                    // more rows than the picture: nothing added, nothing dropped here
+  assert.deepEqual(centreRows([], 4), ["", ""]);
 });

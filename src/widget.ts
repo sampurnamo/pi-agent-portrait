@@ -6,7 +6,7 @@ import { log } from "./log.js";
 import { resolveProgressColor } from "./theme.js";
 import { textCanvas } from "./canvas.js";
 import { wrapWords, type Space } from "./mood.js";
-import { repaintMark, boardLayout, boardPart, SAVE_CURSOR } from "./sixel.js";
+import { repaintMark, boardLayout, boardPart, centreRows, SAVE_CURSOR } from "./sixel.js";
 
 // --- Token formatting ---
 
@@ -201,6 +201,7 @@ function renderKittyFrame(frame: RenderedFrame & { kind: "image" }, width: numbe
  * Layout: frame.rows total (frame.rows-1 text rows + 1 image row).
  */
 function renderITermFrame(frame: RenderedFrame & { kind: "image" }, width: number, config: Config, infoLines: string[], separatorColor: (s: string) => string, board?: { part: string; key: string }): string[] {
+  infoLines = centreRows(infoLines, frame.rows);   // the text beside a tall picture sits at its middle
   const sep = separatorColor("│");
   const size = frame.cols ?? config.size;
   const skipPad = `\x1b[${1 + size}C`;
@@ -311,7 +312,9 @@ export function createWidgetFactory(deps: WidgetDeps) {
         // only when the terminal is wide enough to leave the info rows their room.
         const space = deps.getSpace?.();
         const layout = frame.kind === "image" && frame.cols && space?.board ? boardLayout(width, avatarWidth, space.board, getCellDimensions()) : null;
-        const board = layout && space?.board ? { part: boardPart((frame as { rows: number }).rows, layout.startCol, space.board.sixel), key: space.board.key } : undefined;
+        // A tile shorter than the portrait sits at its middle: boardPart backs up (rows - 1) rows, so a smaller "rows" starts it lower
+        const portraitRows = (frame as { rows: number }).rows;
+        const board = layout && space?.board ? { part: boardPart(portraitRows - Math.floor(Math.max(0, portraitRows - layout.rows) / 2), layout.startCol, space.board.sixel), key: space.board.key } : undefined;
         const infoLines = buildInfoLines(width, avatarWidth, deps.getCtxRef(), deps.pi, theme, config, space, layout?.reserve ?? 0);
 
         const lines: string[] = [];
