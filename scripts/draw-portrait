@@ -252,11 +252,61 @@ def enhance(im):
     """For linework (a pencil sketch) that goes soft when shrunk to a few dozen cells: crop to the head and
     shoulders, stretch the contrast and sharpen. Keeps the alpha channel."""
     w, h = im.size
-    im = im.convert("RGBA").crop((int(w * .08), int(h * .02), int(w * .92), int(h * .86))).resize((w, h), Image.LANCZOS)
+    solid = np.array(im.convert("RGBA"))
+    solid[solid[..., 3] == 0, :3] = (20, 20, 28)  # transparent pixels count as dark, so sharpening leaves no pale fringe
+    im = Image.fromarray(solid, "RGBA").crop((int(w * .08), int(h * .02), int(w * .92), int(h * .86))).resize((w, h), Image.LANCZOS)
     rgb = ImageOps.autocontrast(im.convert("RGB")).filter(ImageFilter.UnsharpMask(radius=2, percent=150, threshold=3))
     out = rgb.convert("RGBA")
     out.putalpha(im.getchannel("A"))
     return out
+
+
+def matte_paper(im, tol=34, soft=16, edge=2):
+    """Make the paper around a sketch transparent. Paper = pixels within `tol` of the border's median colour that are connected
+    to the top, left or right edge of the frame (the bottom edge is where the figure is cropped, never paper); a `soft` ramp
+    feathers the pencil edge. Paper-coloured areas the drawing encloses (a white page, a thought bubble) stay, because the
+    region cannot reach them, and isolated paper-like speckles inside cloth or skin are not treated as paper."""
+    rgb = np.asarray(im.convert("RGB"), dtype=np.int16)
+    h, w, _ = rgb.shape
+    ring = np.concatenate([rgb[:3].reshape(-1, 3), rgb[:, :3].reshape(-1, 3), rgb[:, -3:].reshape(-1, 3)])
+    paper = np.median(ring, axis=0)
+    dist = np.sqrt(((rgb - paper) ** 2).sum(axis=2))
+    cand = dist < tol + soft
+    reach = np.zeros_like(cand)
+    reach[0, :], reach[:, 0], reach[:, -1] = cand[0, :], cand[:, 0], cand[:, -1]
+    while True:  # grow inward from the edge, through candidate pixels only
+        grown = reach.copy()
+        grown[1:, :] |= reach[:-1, :]
+        grown[:-1, :] |= reach[1:, :]
+        grown[:, 1:] |= reach[:, :-1]
+        grown[:, :-1] |= reach[:, 1:]
+        grown &= cand
+        if (grown == reach).all():
+            break
+        reach = grown
+    padded = np.pad(reach.astype(int), 1)  # despeckle: a paper pixel needs 4 of its 8 neighbours to be paper too
+    neighbours = sum(padded[1 + dy:1 + dy + h, 1 + dx:1 + dx + w] for dy in (-1, 0, 1) for dx in (-1, 0, 1) if (dy, dx) != (0, 0))
+    bg = reach & (neighbours >= 4)
+    alpha = np.ones((h, w))
+    alpha[bg] = np.clip((dist[bg] - tol) / soft, 0, 1)
+    alpha[:edge, :] = 0  # the sheet's cell edge can leave a line along the top and the sides
+    alpha[:, :edge] = 0
+    alpha[:, -edge:] = 0
+    a = alpha[..., None]
+    colour = np.where(a > 0, (rgb - (1 - a) * paper) / np.maximum(a, 1e-3), rgb)  # take the paper tint out of the soft edge
+    return Image.fromarray(np.dstack([np.clip(colour, 0, 255), alpha * 255]).astype("uint8"), "RGBA")
+
+
+def matte_set(set_dir):
+    """Make the paper transparent in every frame of a set, in place (the sheet is left as it is)."""
+    n = 0
+    for state in sorted(d for d in os.listdir(set_dir) if os.path.isdir(os.path.join(set_dir, d))):
+        for f in sorted(os.listdir(os.path.join(set_dir, state))):
+            if f.endswith(".png"):
+                path = os.path.join(set_dir, state, f)
+                matte_paper(Image.open(path)).save(path)
+                n += 1
+    print(f"paper made transparent in {n} frames of {set_dir}")
 
 
 def vignette_dark(im):
@@ -416,6 +466,10 @@ def main():
                    help="with --blocks-only: the file to write (default ascii.yaml), e.g. a footer.yaml")
     p.add_argument("--blocks-states", metavar="LIST",
                    help="with --blocks-only: only these states, comma separated (e.g. idle,hi for a footer face)")
+    p.add_argument("--transparent", action="store_true",
+                   help="make the paper around a sketch transparent in the frames (for sketch sets drawn on paper)")
+    p.add_argument("--matte-only", metavar="SET_DIR",
+                   help="make the paper transparent in a set that is already drawn, in place, then stop")
     p.add_argument("--blocks-vignette", action="store_true",
                    help="fade a sketch's paper into a dark background at the edges, so the face sits on the terminal's dark"
                         " and not on a bright card (for sketch sets on light paper)")
@@ -427,6 +481,8 @@ def main():
                         " about twice the horizontal detail at the same size (needs a font with the quadrant block glyphs)")
     a = p.parse_args()
 
+    if a.matte_only:
+        return matte_set(a.matte_only)
     if a.blocks_only:
         return write_blocks(a.blocks_only, a.blocks or 24, a.blocks_name, a.blocks_mode,
                             set(a.blocks_states.split(",")) if a.blocks_states else None, a.blocks_sharpen, a.blocks_vignette)
@@ -527,6 +583,8 @@ Do not copy take 1's poses, and ignore the poses in the first image too: use the
     finally:
         if not keep:
             shutil.rmtree(work, ignore_errors=True)
+    if a.transparent:
+        matte_set(dst)
     if a.blocks:
         write_blocks(dst, a.blocks, mode=a.blocks_mode, sharpen=a.blocks_sharpen, vignette=a.blocks_vignette)
     config_path = os.path.join(a.dest, "config.json")

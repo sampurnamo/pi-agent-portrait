@@ -36,3 +36,9 @@ jobs:
           grep -q '^  close:' "$RUNNER_TEMP/nova/ascii.yaml"
           scripts/draw-portrait --blocks-only "$RUNNER_TEMP/nova" --blocks 16 --blocks-mode quadrant --blocks-name footer.yaml --blocks-states idle
           grep -q '^idle:' "$RUNNER_TEMP/nova/footer.yaml"
+      # Paper to transparent: a cream border around a dark disc becomes see-through at the edge, opaque in the middle.
+      - run: |
+          mkdir -p "$RUNNER_TEMP/paper/idle"
+          python -c "from PIL import Image, ImageDraw; im = Image.new('RGB', (64, 64), (245, 222, 195)); ImageDraw.Draw(im).ellipse((14, 14, 50, 50), fill=(60, 40, 30)); im.save('$RUNNER_TEMP/paper/idle/idle.png')"
+          scripts/draw-portrait --matte-only "$RUNNER_TEMP/paper"
+          python -c "from PIL import Image; a = Image.open('$RUNNER_TEMP/paper/idle/idle.png').getchannel('A'); assert a.getpixel((2, 20)) == 0 and a.getpixel((32, 32)) == 255, 'matte'"

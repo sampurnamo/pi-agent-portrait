@@ -152,6 +152,8 @@ draw-portrait --name forge --style "a pencil and ink portrait sketch on warm cre
 
 Fine linework goes soft when it is shrunk to a few dozen cells. `--blocks-sharpen` crops to the head and shoulders, stretches the contrast and sharpens before the block art is made; a bigger `--blocks` (36 or 40 in quadrant mode) helps too. Leave it off for pixel art, which survives shrinking.
 
+`--transparent` (or `--matte-only SET_DIR` for a set already drawn) makes the paper around a sketch transparent in the frames themselves: pixels that look like paper and connect to the top or the sides of the frame become see-through, with a soft edge, while paper-coloured areas the drawing encloses (a thought bubble, a white page) stay. The bottom edge is never treated as paper, since the figure is cropped there.
+
 A sketch on light paper looks like a bright card in a dark terminal; `--blocks-vignette` fades the paper into the dark at the edges, so the face sits on the terminal's own background.
 
 ### More takes
