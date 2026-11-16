@@ -15,6 +15,8 @@ import { TmuxKittyUnicodeRenderer } from "./render_tmux_kitty_unicode.js";
 import { ITermRenderer } from "./render_iterm.js";
 import { TmuxITermRenderer } from "./render_tmux_iterm.js";
 import { AsciiRenderer } from "./render_ascii.js";
+import { SixelRenderer } from "./render_sixel.js";
+import { sixelWanted } from "./sixel.js";
 import { Animator } from "./animator.js";
 import { createWidgetFactory } from "./widget.js";
 import { readSpace, spaceKey, type Space } from "./mood.js";
@@ -104,9 +106,15 @@ export default function (pi: ExtensionAPI) {
     const setDir = findEmoteSetDir(setName, extDir, cwd);
     const isAsciiOnly = existsSync(join(setDir, "ascii.yaml")) && !hasImageFrames(setDir);
 
-    if (isAsciiOnly) {
+    if (sixelWanted(process.env, existsSync(join(setDir, "sixel.json")))) {
+      // Windows Terminal draws Sixel: the set's own pictures instead of block art
+      if (renderer.constructor !== SixelRenderer) {
+        renderer = new SixelRenderer();
+        animator.setRenderer(renderer);
+      }
+    } else if (isAsciiOnly) {
       // ASCII-only set — use AsciiRenderer regardless of terminal
-      if (!(renderer instanceof AsciiRenderer)) {
+      if (renderer.constructor !== AsciiRenderer) {
         renderer = new AsciiRenderer();
         animator.setRenderer(renderer);
       }

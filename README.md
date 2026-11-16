@@ -250,6 +250,10 @@ Available theme color tokens: `accent`, `border`, `borderAccent`, `borderMuted`,
 
 Invalid values are ignored with a warning and fall back to the defaults.
 
+## Sixel (Windows Terminal)
+
+`draw-portrait --sixel 200` (or `--sixel-only SET_DIR` for a set that is already drawn) writes `sixel.json` next to the frames. In a plain Windows Terminal tab (not inside tmux or psmux) the widget then draws the real picture instead of block art. `PI_PORTRAIT_SIXEL=0` turns this off, `=1` forces it. `sixel.json` is about 2.4 MB for 30 frames at 200 pixels; it can be regenerated from the PNGs, so it need not be committed.
+
 ## A space beside the portrait
 
 Set `PI_PORTRAIT_SPACE` to a folder the agent (or you) writes to, and the widget shows it above the info lines:

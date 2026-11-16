@@ -198,7 +198,7 @@ function parseSimpleYaml(text: string): AsciiFrameMap {
 
 // --- ASCII frame storage ---
 
-interface AsciiFrameSet {
+export interface AsciiFrameSet {
   /** Named frames — each value is an array of lines. */
   named: Map<string, string[]>;
   /** Ordered list of frame names (for cycling and random pick). */
@@ -215,7 +215,7 @@ function randomPick<T>(arr: T[]): T {
  */
 export class AsciiRenderer implements Renderer {
   private tuiRef: TUI | null = null;
-  private frames: Map<EmoteState, AsciiFrameSet> = new Map();
+  protected frames: Map<EmoteState, AsciiFrameSet> = new Map();
   private currentFrame: RenderedFrame | null = null;
   private lastShown: string | null = null;
 

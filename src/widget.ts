@@ -192,19 +192,22 @@ function renderKittyFrame(frame: RenderedFrame & { kind: "image" }, width: numbe
  */
 function renderITermFrame(frame: RenderedFrame & { kind: "image" }, width: number, config: Config, infoLines: string[], separatorColor: (s: string) => string): string[] {
   const sep = separatorColor("│");
-  const size = config.size;
+  const size = frame.cols ?? config.size;
   const skipPad = `\x1b[${1 + size}C`;
+  // Sixel: every row beside the image must change with the picture, so the TUI clears and rewrites them all and no
+  // earlier picture shows through the new one's transparent pixels. Two harmless, different resets alternate.
+  const repaint = frame.repaint === undefined ? "" : "\x1b[0m".repeat(1 + (frame.repaint % 2));
   const lines: string[] = [];
 
   for (let i = 0; i < frame.rows; i++) {
     if (i < frame.rows - 1) {
       // Text rows: cursor-right past image area, then info
-      lines.push(`${skipPad} ${sep} ${infoLines[i] ?? ""}`);
+      lines.push(`${skipPad} ${sep} ${infoLines[i] ?? ""}${repaint}`);
     } else {
       // Last row: cursor-up to first text row, place image, then text
       // After the image, cursor returns to this row (last image row, col 0).
       const up = frame.rows > 1 ? `\x1b[${frame.rows - 1}A` : "";
-      lines.push(`${up}\x1b[1C${frame.sequence} ${sep} ${infoLines[i] ?? ""}`);
+      lines.push(`${up}\x1b[1C${frame.sequence} ${sep} ${infoLines[i] ?? ""}${repaint}`);
     }
   }
 
@@ -290,7 +293,7 @@ export function createWidgetFactory(deps: WidgetDeps) {
         const borderColor = colorStyler(config.theme.border ?? "thinking-level-color", thinkingStyler, theme);
         const separatorColor = colorStyler(config.theme["vertical-separator"] ?? "thinking-level-color", thinkingStyler, theme);
         const border = borderColor("─".repeat(width));
-        const avatarWidth = frame.kind === "text" ? textCanvas(frame.lines, visibleWidth).cols : config.size;
+        const avatarWidth = frame.kind === "text" ? textCanvas(frame.lines, visibleWidth).cols : (frame.kind === "image" && frame.cols) || config.size;
         const infoLines = buildInfoLines(width, avatarWidth, deps.getCtxRef(), deps.pi, theme, config, deps.getSpace?.());
 
         const lines: string[] = [];

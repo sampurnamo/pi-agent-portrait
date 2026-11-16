@@ -5,12 +5,14 @@ import type { TUI } from "@earendil-works/pi-tui";
  * A rendered frame — either an image sequence (Kitty/iTerm2) or plain text lines.
  *
  * For image frames:
+ * - `cols`: the image's own width in cells, when it is not `config.size` (Sixel frames have a width of their own).
+ * - `repaint`: changes with every new frame; the widget repaints the rows beside the image when it does (Sixel).
  * - `cursorAdvances`: whether the terminal cursor moves past the image after rendering.
  *   Kitty with moveCursor=false does NOT advance; iTerm2 always advances.
  *   The widget uses this to decide whether to add padding after the image sequence.
  */
 export type RenderedFrame =
-  | { kind: "image"; sequence: string; rows: number; cursorAdvances: boolean; padMode?: "spaces" | "skip" }
+  | { kind: "image"; sequence: string; rows: number; cursorAdvances: boolean; padMode?: "spaces" | "skip"; cols?: number; repaint?: number }
   | { kind: "text"; lines: string[] }
   | { kind: "placeholder"; lines: string[]; rows: number };
 
