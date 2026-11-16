@@ -6,6 +6,7 @@ import { log } from "./log.js";
 import { resolveProgressColor } from "./theme.js";
 import { textCanvas } from "./canvas.js";
 import type { Space } from "./mood.js";
+import { repaintMark } from "./sixel.js";
 
 // --- Token formatting ---
 
@@ -194,9 +195,9 @@ function renderITermFrame(frame: RenderedFrame & { kind: "image" }, width: numbe
   const sep = separatorColor("│");
   const size = frame.cols ?? config.size;
   const skipPad = `\x1b[${1 + size}C`;
-  // Sixel: every row beside the image must change with the picture, so the TUI clears and rewrites them all and no
-  // earlier picture shows through the new one's transparent pixels. Two harmless, different resets alternate.
-  const repaint = frame.repaint === undefined ? "" : "\x1b[0m".repeat(1 + (frame.repaint % 2));
+  // Sixel: any change to the frame or to a row must rewrite the whole block (see repaintMark in sixel.ts), or a clear of
+  // one row alone would cut a band out of the picture.
+  const repaint = frame.repaint === undefined ? "" : repaintMark(frame.repaint, infoLines);
   const lines: string[] = [];
 
   for (let i = 0; i < frame.rows; i++) {

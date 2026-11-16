@@ -23,6 +23,20 @@ export interface SixelFile {
  */
 export const IMAGE_LINE_MARKER = "\x1b_G;\x1b\\";
 
+/**
+ * Windows Terminal keeps a Sixel in the cells it covers, and clearing a line (which pi-tui does before it rewrites it)
+ * erases that line's slice of the picture. pi-tui rewrites only the lines that changed, so when one row beside the picture
+ * changes alone (a token count, the mood) it would cut a black band across the image. A mark that changes whenever the
+ * frame or any row's text changes, put on every row, makes the changed range cover the whole block, so all rows are cleared
+ * and the picture, drawn on the last row, goes on top of them. An APC string is ignored by terminals and by pi-tui's width
+ * measure, and with no "G" it is not a Kitty command.
+ */
+export function repaintMark(frameGeneration: number, rows: string[]): string {
+  let h = 5381;
+  for (const ch of rows.join("\n")) h = ((h << 5) + h + ch.charCodeAt(0)) >>> 0;
+  return `\x1b_p${frameGeneration}.${h.toString(36)}\x1b\\`;
+}
+
 /** Whole cells the image covers. */
 export function sixelGeometry(widthPx: number, heightPx: number, cell: Cell): { cols: number; rows: number } {
   return {
