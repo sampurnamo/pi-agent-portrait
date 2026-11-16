@@ -250,6 +250,18 @@ Available theme color tokens: `accent`, `border`, `borderAccent`, `borderMuted`,
 
 Invalid values are ignored with a warning and fall back to the defaults.
 
+## A space beside the portrait
+
+Set `PI_PORTRAIT_SPACE` to a folder the agent (or you) writes to, and the widget shows it above the info lines:
+
+| File | Shown as |
+|------|----------|
+| `mood.txt` | `feeling ...` (accent colour while the file is under 3 hours old, dim after) |
+| `pins.jsonl` | `on her wall: ...`, the `note` (else the `file`) of the last line |
+| `face.txt` | An emote state (`success`, `hi`, `think`, ...) worn while resting instead of the idle frame, while the mood is fresh |
+
+The folder is polled every 5 seconds. Without the variable, or without a `mood.txt`, nothing changes.
+
 ## Multiplexers
 
 pi-emote can render image avatars through **tmux** using DCS passthrough. When tmux is detected, pi-emote auto-detects the outer terminal and picks the right image protocol.

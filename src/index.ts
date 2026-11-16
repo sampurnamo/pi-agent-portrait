@@ -17,6 +17,7 @@ import { TmuxITermRenderer } from "./render_tmux_iterm.js";
 import { AsciiRenderer } from "./render_ascii.js";
 import { Animator } from "./animator.js";
 import { createWidgetFactory } from "./widget.js";
+import { readSpace, spaceKey, type Space } from "./mood.js";
 import { resolveRenderer } from "./terminal.js";
 
 const IMAGE_STATES = ALL_STATES;
@@ -88,6 +89,14 @@ export default function (pi: ExtensionAPI) {
   let renderer = createRendererFromResolved(lastResolved, config.size);
 
   const animator = new Animator(config, renderer);
+
+  // Her space: PI_PORTRAIT_SPACE names a folder with mood.txt, face.txt and pins.jsonl (see mood.ts). Polled, because
+  // she writes it from a shell command and a poll of three small files costs nothing.
+  const spaceDir = process.env.PI_PORTRAIT_SPACE;
+  let space: Space = readSpace(spaceDir);
+  let spaceSig = spaceKey(space);
+  let spaceTimer: ReturnType<typeof setInterval> | null = null;
+  animator.setMoodFace(() => space.mood?.face ?? "");
 
   function loadEmoteSet(setName: string) {
     currentEmoteSet = setName;
@@ -244,13 +253,29 @@ export default function (pi: ExtensionAPI) {
       pi,
       getCtxRef: () => ctxRef,
       getCurrentEmoteSet: () => currentEmoteSet,
+      getSpace: () => space,
     }), { placement: "aboveEditor" });
 
     widgetActive = true;
+    if (spaceDir) {
+      space = readSpace(spaceDir);
+      spaceSig = spaceKey(space);
+      if (spaceTimer) clearInterval(spaceTimer);
+      spaceTimer = setInterval(() => {
+        const next = readSpace(spaceDir);
+        if (spaceKey(next) === spaceSig) return;
+        space = next;
+        spaceSig = spaceKey(next);
+        // Resting: wear the new face and redraw the rows. Busy: the rows catch up on the next frame.
+        if (animator.currentState === "idle") { animator.resetRenderCache(); animator.enterIdle(); }
+      }, 5000);
+      spaceTimer.unref?.();
+    }
     setTimeout(() => animator.transitionTo("hi"), 500);
   });
 
   pi.on("session_shutdown", async (_event, ctx) => {
+    if (spaceTimer) { clearInterval(spaceTimer); spaceTimer = null; }
     animator.clearAllTimers();
     animator.disposeRenderer();
     if (widgetActive && ctx.hasUI) {

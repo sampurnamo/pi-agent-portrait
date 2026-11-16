@@ -9,6 +9,8 @@ All notable changes to pi-agent-portrait, and to pi-emote before it, are documen
 
 - **`--style TEXT`** draws in another art style than the default pixel art (for example a pencil sketch), keeping the reference sheet only as a guide to the grid and the poses. **`--blocks-sharpen`** crops and sharpens before block art is made, for linework that goes soft when shrunk. **`--blocks-vignette`** fades a sketch's paper into a dark background at the edges. **`--transparent`** and **`--matte-only SET_DIR`** make the paper around a sketch transparent in the frames themselves. A sheet with a real transparent background is cut with its alpha kept (the grid is taken to fill the canvas). **`--sixel PX`** and **`--sixel-only SET_DIR`** write `sixel.json`, every frame pre-encoded as Sixel (not used by the widget yet).
 
+- **A space beside the portrait.** Set `PI_PORTRAIT_SPACE` to a folder and the widget adds two rows above the info lines: `feeling <mood.txt>` (accent colour for 3 hours, then dim) and `on her wall: <note of the last line of pins.jsonl>`. A `face.txt` holding an emote state (`success`, `hi`, `think`, ...) is the face she wears while resting, in place of the idle frame, for as long as the mood is fresh; busy states still win. The folder is polled every 5 seconds; with no variable, or no `mood.txt`, nothing changes. See `src/mood.ts`.
+
 ### Changed
 - The text portrait canvas is at least 8 by 4 and takes the size of the frame when it is bigger; the info lines are centered beside a taller portrait.
 

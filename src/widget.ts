@@ -5,6 +5,7 @@ import type { RenderedFrame } from "./renderer.js";
 import { log } from "./log.js";
 import { resolveProgressColor } from "./theme.js";
 import { textCanvas } from "./canvas.js";
+import type { Space } from "./mood.js";
 
 // --- Token formatting ---
 
@@ -62,7 +63,7 @@ function colorStyler(color: WidgetColor, thinking: (s: string) => string, theme:
   return (s: string) => theme.fg(color, s);
 }
 
-function buildInfoLines(width: number, avatarWidth: number, ctxRef: any, pi: any, theme: any, config: any): string[] {
+function buildInfoLines(width: number, avatarWidth: number, ctxRef: any, pi: any, theme: any, config: any, space?: Space | null): string[] {
   const lines: string[] = [];
   if (!ctxRef) return lines;
 
@@ -140,10 +141,16 @@ function buildInfoLines(width: number, avatarWidth: number, ctxRef: any, pi: any
   const stylePwd = colorStyler(wt["working-directory"] ?? "warning", thinkingStyler, theme);
   const styleFns = [styleModel, styleProgress, styleStats, stylePwd];
 
-  return lines.map((l, i) => {
+  const styled = lines.map((l, i) => {
     if (visibleWidth(l) > infoWidth) l = truncateToWidth(l, infoWidth, "…");
     return styleFns[i](l);
   });
+  // Her space (see mood.ts): how she feels, then what is on her wall. Fresh mood in the accent colour, stale dim.
+  const fit = (l: string) => (visibleWidth(l) > infoWidth ? truncateToWidth(l, infoWidth, "…") : l);
+  const extra: string[] = [];
+  if (space?.mood) extra.push(theme.fg(space.mood.fresh ? "accent" : "dim", fit(`feeling ${space.mood.text}`)));
+  if (space?.wall) extra.push(theme.fg("dim", fit(`on her wall: ${space.wall}`)));
+  return [...extra, ...styled];
 }
 
 // --- Render helpers ---
@@ -256,6 +263,8 @@ export interface WidgetDeps {
   pi: any;
   getCtxRef: () => any;
   getCurrentEmoteSet: () => string;
+  /** Her mood and wall, when PI_PORTRAIT_SPACE names a folder (see mood.ts). */
+  getSpace?: () => Space | null;
 }
 
 export function createWidgetFactory(deps: WidgetDeps) {
@@ -282,7 +291,7 @@ export function createWidgetFactory(deps: WidgetDeps) {
         const separatorColor = colorStyler(config.theme["vertical-separator"] ?? "thinking-level-color", thinkingStyler, theme);
         const border = borderColor("─".repeat(width));
         const avatarWidth = frame.kind === "text" ? textCanvas(frame.lines, visibleWidth).cols : config.size;
-        const infoLines = buildInfoLines(width, avatarWidth, deps.getCtxRef(), deps.pi, theme, config);
+        const infoLines = buildInfoLines(width, avatarWidth, deps.getCtxRef(), deps.pi, theme, config, deps.getSpace?.());
 
         const lines: string[] = [];
         lines.push(border);

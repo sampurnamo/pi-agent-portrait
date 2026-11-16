@@ -79,6 +79,13 @@ export class Animator {
     this.config = config;
   }
 
+  /** The emote state she chose for her mood ("" for none); worn while resting, in place of the idle frame. */
+  private moodFace: () => string = () => "";
+
+  setMoodFace(fn: () => string) {
+    this.moodFace = fn;
+  }
+
   setRenderer(renderer: Renderer) {
     this.renderer = renderer;
     // A new renderer (image <-> ASCII) needs the TUI to request redraws.
@@ -214,9 +221,15 @@ export class Animator {
   }
 
   enterIdle() {
-    const defaultFile = this.named("idle", this.emotesConfig.idle?.default ?? "idle.png");
-    this.renderer.showFrame("idle", defaultFile);
-    this.scheduleBlink();
+    const face = this.moodFace();
+    const chosen = face && face !== "idle" && this.renderer.showRandomFrame(face as EmoteState);
+    if (chosen) {
+      if (this.blinkTimer) { clearTimeout(this.blinkTimer); this.blinkTimer = null; }   // blinking is the idle frame's own
+    } else {
+      const defaultFile = this.named("idle", this.emotesConfig.idle?.default ?? "idle.png");
+      this.renderer.showFrame("idle", defaultFile);
+      this.scheduleBlink();
+    }
     if (this.sleepTimer) { clearTimeout(this.sleepTimer); this.sleepTimer = null; }
     if (this.config.sleepAfterMs > 0) {
       this.sleepTimer = setTimeout(() => {
