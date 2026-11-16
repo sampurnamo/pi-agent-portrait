@@ -42,3 +42,5 @@ jobs:
           python -c "from PIL import Image, ImageDraw; im = Image.new('RGB', (64, 64), (245, 222, 195)); ImageDraw.Draw(im).ellipse((14, 14, 50, 50), fill=(60, 40, 30)); im.save('$RUNNER_TEMP/paper/idle/idle.png')"
           scripts/draw-portrait --matte-only "$RUNNER_TEMP/paper"
           python -c "from PIL import Image; a = Image.open('$RUNNER_TEMP/paper/idle/idle.png').getchannel('A'); assert a.getpixel((2, 20)) == 0 and a.getpixel((32, 32)) == 255, 'matte'"
+          scripts/draw-portrait --sixel-only "$RUNNER_TEMP/paper" --sixel 24
+          python -c "import json; d = json.load(open('$RUNNER_TEMP/paper/sixel.json')); s = d['frames']['idle']['default']; assert s.startswith('P') and s.endswith('\\') and d['width'] == 24, 'sixel'"

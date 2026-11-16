@@ -32,7 +32,7 @@ Backends:
   auto   codex when it is installed, else azure; azure is also tried when
          codex fails and the Azure variables are set
 """
-import argparse, base64, json, os, re, shutil, subprocess, sys, tempfile, urllib.request
+import argparse, base64, itertools, json, os, re, shutil, subprocess, sys, tempfile, urllib.request
 try:
     import fcntl
 except ImportError:  # Windows has no fcntl: two runs on one destination are not serialised there
@@ -232,12 +232,19 @@ def cut(sheet_path, dst, layout="30"):
     """Image models keep the grid; its extent is where the dark background
     ends (older 19-cell sheets have white empty cells at the end). Frames are
     square crops centred in each grid slot."""
-    im = Image.open(sheet_path).convert("RGB")
-    a = np.asarray(im).astype(int)
-    dark = a.mean(axis=2) <= 200
-    margin = im.width // 20
-    bottom = np.where(dark[:, margin])[0].max() + 1
-    right = np.where(dark[im.height // 10, :])[0].max() + 1
+    src = Image.open(sheet_path)
+    transparent = src.mode in ("RGBA", "LA", "PA") and np.asarray(src.convert("RGBA"))[..., 3].min() < 250
+    im = src.convert("RGBA" if transparent else "RGB")
+    if transparent:
+        # A sheet with a transparent background has no dark background to measure: the grid is taken to fill the
+        # canvas, and the frames keep their alpha.
+        right, bottom = im.width, im.height
+    else:
+        a = np.asarray(im).astype(int)
+        dark = a.mean(axis=2) <= 200
+        margin = im.width // 20
+        bottom = np.where(dark[:, margin])[0].max() + 1
+        right = np.where(dark[im.height // 10, :])[0].max() + 1
     frames, cols, rows = LAYOUTS[layout]
     cw, ch = right / cols, bottom / rows
     side = int(min(cw, ch) * 0.97)
@@ -402,6 +409,57 @@ def block_lines(path, px, mode="half", sharpen=False, vignette=False):
     return (quadrant_lines if mode == "quadrant" else half_block_lines)(path, px, sharpen, vignette)
 
 
+def sixel_encode(im, colours=96):
+    """One frame as a Sixel image (a DCS sequence). Pixels with alpha under 128 are left unset, and with P2=1 the terminal keeps
+    its own background there, so a transparent sketch sits on the terminal's colour."""
+    rgba = im.convert("RGBA")
+    w, h = rgba.size
+    solid = rgba.getchannel("A").point(lambda a: 255 if a >= 128 else 0)
+    opaque = np.asarray(solid) > 0
+    flat = Image.new("RGB", rgba.size, (0, 0, 0))
+    flat.paste(rgba.convert("RGB"), mask=solid)
+    quant = flat.quantize(colours, dither=Image.Dither.NONE)
+    pal = quant.getpalette()
+    idx = np.asarray(quant)
+    out = ['\x1bP0;1;0q"1;1;%d;%d' % (w, h)]  # P2=1: unset pixels stay transparent; "1;1: square pixels
+    for i in sorted(set(idx[opaque].tolist())):
+        r, g, b = pal[i * 3:i * 3 + 3]
+        out.append("#%d;2;%d;%d;%d" % (i, r * 100 // 255, g * 100 // 255, b * 100 // 255))
+    bands = range(0, h, 6)
+    for n, top in enumerate(bands):
+        band, solid_band = idx[top:top + 6], opaque[top:top + 6]
+        first = True
+        for c in sorted(set(band[solid_band].tolist())):
+            bits = np.zeros(w, dtype=int)
+            for dy in range(band.shape[0]):
+                bits |= ((band[dy] == c) & solid_band[dy]).astype(int) << dy
+            out.append(("" if first else "$") + "#%d" % c)
+            first = False
+            for value, run in itertools.groupby(bits.tolist()):
+                k = len(list(run))
+                out.append("!%d%s" % (k, chr(63 + value)) if k > 3 else chr(63 + value) * k)
+        if n < len(bands) - 1:
+            out.append("-")
+    out.append("\x1b\\")
+    return "".join(out)
+
+
+def write_sixel(set_dir, px, name="sixel.json"):
+    """Write <set>/sixel.json: every frame pre-encoded as Sixel at px pixels wide, for terminals that draw Sixel (Windows Terminal).
+    The widget then has no image decoding to do. Frame names follow the block art's."""
+    frames, height = {}, None
+    for state in sorted(d for d in os.listdir(set_dir) if os.path.isdir(os.path.join(set_dir, d))):
+        for f in sorted(x for x in os.listdir(os.path.join(set_dir, state)) if x.endswith(".png")):
+            im = Image.open(os.path.join(set_dir, state, f)).convert("RGBA")
+            im = im.resize((px, max(1, round(im.height * px / im.width))), Image.LANCZOS)
+            height = im.height
+            frames.setdefault(state, {})[block_key(state, f[:-4])] = sixel_encode(im)
+    path = os.path.join(set_dir, name)
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump({"width": px, "height": height, "frames": frames}, fh)
+    print(f"sixel ready: {path} ({sum(len(v) for v in frames.values())} frames, {px} by {height} pixels)")
+
+
 def block_key(state, stem):
     """The frame name the ASCII renderer looks a frame up by: idle.png is "default", idle_blink.png is "blink"."""
     if stem == state:
@@ -468,6 +526,11 @@ def main():
                    help="with --blocks-only: only these states, comma separated (e.g. idle,hi for a footer face)")
     p.add_argument("--transparent", action="store_true",
                    help="make the paper around a sketch transparent in the frames (for sketch sets drawn on paper)")
+    p.add_argument("--sixel", type=int, default=0, metavar="PX",
+                   help="also write sixel.json: every frame pre-encoded as Sixel, PX pixels wide (e.g. 120), for terminals that"
+                        " draw Sixel, such as Windows Terminal (default 0: off)")
+    p.add_argument("--sixel-only", metavar="SET_DIR",
+                   help="write sixel.json for a set that is already drawn (with --sixel PX, default 120), then stop")
     p.add_argument("--matte-only", metavar="SET_DIR",
                    help="make the paper transparent in a set that is already drawn, in place, then stop")
     p.add_argument("--blocks-vignette", action="store_true",
@@ -483,6 +546,8 @@ def main():
 
     if a.matte_only:
         return matte_set(a.matte_only)
+    if a.sixel_only:
+        return write_sixel(a.sixel_only, a.sixel or 120)
     if a.blocks_only:
         return write_blocks(a.blocks_only, a.blocks or 24, a.blocks_name, a.blocks_mode,
                             set(a.blocks_states.split(",")) if a.blocks_states else None, a.blocks_sharpen, a.blocks_vignette)
@@ -585,6 +650,8 @@ Do not copy take 1's poses, and ignore the poses in the first image too: use the
             shutil.rmtree(work, ignore_errors=True)
     if a.transparent:
         matte_set(dst)
+    if a.sixel:
+        write_sixel(dst, a.sixel)
     if a.blocks:
         write_blocks(dst, a.blocks, mode=a.blocks_mode, sharpen=a.blocks_sharpen, vignette=a.blocks_vignette)
     config_path = os.path.join(a.dest, "config.json")
