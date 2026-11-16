@@ -264,7 +264,7 @@ Set `PI_PORTRAIT_SPACE` to a folder the agent (or you) writes to, and the widget
 | `pins.jsonl` | `on her wall: ...`, the `note` (else the `file`) of the last line |
 | `face.txt` | An emote state (`success`, `hi`, `think`, ...) worn while resting instead of the idle frame, while the mood is fresh |
 
-The folder is polled every 5 seconds. Without the variable, or without a `mood.txt`, nothing changes.
+The folder is polled every 5 seconds. Without the variable, a `space` folder with a `mood.txt` inside the folder pi was started in is used. With neither, nothing changes.
 
 ## Multiplexers
 

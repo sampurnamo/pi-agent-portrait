@@ -94,7 +94,8 @@ export default function (pi: ExtensionAPI) {
 
   // Her space: PI_PORTRAIT_SPACE names a folder with mood.txt, face.txt and pins.jsonl (see mood.ts). Polled, because
   // she writes it from a shell command and a poll of three small files costs nothing.
-  const spaceDir = process.env.PI_PORTRAIT_SPACE;
+  // Without the variable, a "space" folder inside the folder pi was started in is used (resolved at session_start).
+  let spaceDir: string | undefined = process.env.PI_PORTRAIT_SPACE;
   let space: Space = readSpace(spaceDir);
   let spaceSig = spaceKey(space);
   let spaceTimer: ReturnType<typeof setInterval> | null = null;
@@ -265,6 +266,8 @@ export default function (pi: ExtensionAPI) {
     }), { placement: "aboveEditor" });
 
     widgetActive = true;
+    spaceDir = process.env.PI_PORTRAIT_SPACE ?? (existsSync(join(cwd, "space", "mood.txt")) ? join(cwd, "space") : undefined);
+    log(`space: dir=${spaceDir ?? "none"}`);
     if (spaceDir) {
       space = readSpace(spaceDir);
       spaceSig = spaceKey(space);
