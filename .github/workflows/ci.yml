@@ -36,6 +36,9 @@ jobs:
           grep -q '^  close:' "$RUNNER_TEMP/nova/ascii.yaml"
           scripts/draw-portrait --blocks-only "$RUNNER_TEMP/nova" --blocks 16 --blocks-mode quadrant --blocks-name footer.yaml --blocks-states idle
           grep -q '^idle:' "$RUNNER_TEMP/nova/footer.yaml"
+          scripts/draw-portrait --blocks-only "$RUNNER_TEMP/nova" --blocks 16 --blocks-mode sextant --blocks-name sextant.yaml --blocks-states idle
+          grep -q '^idle:' "$RUNNER_TEMP/nova/sextant.yaml"
+          python -c "t = open('$RUNNER_TEMP/nova/sextant.yaml', encoding='utf-8').read(); assert any(0x1FB00 <= ord(c) <= 0x1FB3B for c in t), 'sextant glyphs'"
       # Paper to transparent: a cream border around a dark disc becomes see-through at the edge, opaque in the middle.
       - run: |
           mkdir -p "$RUNNER_TEMP/paper/idle"

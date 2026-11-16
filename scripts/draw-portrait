@@ -405,8 +405,55 @@ def quadrant_lines(path, px, sharpen=False, vignette=False):
     return lines
 
 
+def sextant_char(m):
+    """The Unicode sextant for a mask (bit 1 upper left, 2 upper right, 4 middle left, 8 middle right, 16 lower left, 32 lower right).
+    U+1FB00 onward are the sextants in mask order, except that the left half (21) and right half (42) are older block characters."""
+    if m == 0:
+        return " "
+    return {21: "▌", 42: "▐"}.get(m) or chr(0x1FB00 + m - 1 - (m > 21) - (m > 42))
+
+
+def sextant_lines(path, px, sharpen=False, vignette=False):
+    """Like quadrant_lines, but 2 by 3 pixels per cell: the same width and height in cells with half as much again vertical detail.
+    Needs a font with the Symbols for Legacy Computing block (Cascadia Mono in Windows Terminal has it).
+    shortcut: transparent pixels are drawn over a dark background here."""
+    im = Image.open(path).convert("RGBA")
+    if sharpen:
+        im = enhance(im)
+    if vignette:
+        im = vignette_dark(im)
+    base = Image.new("RGBA", im.size, (20, 20, 28, 255))
+    base.alpha_composite(im)
+    rows = px // 2  # cells are twice as tall as wide, so a square picture is px cells across and px / 2 down
+    pix = base.convert("RGB").resize((px * 2, rows * 3), Image.LANCZOS).load()
+
+    def mean(colours):
+        return tuple(sum(c[i] for c in colours) // len(colours) for i in range(3))
+
+    lines = []
+    for cy in range(rows):
+        out, last = [], None
+        for cx in range(px):
+            cell = [pix[cx * 2 + i % 2, cy * 3 + i // 2] for i in range(6)]
+            best = None
+            for m in range(63):  # 63 (all foreground) looks the same as 0 (all background)
+                fg = [c for i, c in enumerate(cell) if m >> i & 1]
+                bg = [c for i, c in enumerate(cell) if not m >> i & 1]
+                mf, mb = (mean(fg) if fg else None), mean(bg)
+                err = sum(sum((a - b) ** 2 for a, b in zip(c, mf if m >> i & 1 else mb)) for i, c in enumerate(cell))
+                if best is None or err < best[0]:
+                    best = (err, m, mf, mb)
+            _, m, mf, mb = best
+            code = "\x1b[48;2;%d;%d;%dm" % mb if m == 0 else "\x1b[38;2;%d;%d;%dm\x1b[48;2;%d;%d;%dm" % (*mf, *mb)
+            out.append(sextant_char(m) if code == last else code + sextant_char(m))
+            last = code
+        lines.append("".join(out) + "\x1b[0m")
+    return lines
+
+
 def block_lines(path, px, mode="half", sharpen=False, vignette=False):
-    return (quadrant_lines if mode == "quadrant" else half_block_lines)(path, px, sharpen, vignette)
+    fn = {"quadrant": quadrant_lines, "sextant": sextant_lines}.get(mode, half_block_lines)
+    return fn(path, px, sharpen, vignette)
 
 
 def sixel_encode(im, colours=96):
@@ -539,7 +586,7 @@ def main():
     p.add_argument("--blocks-sharpen", action="store_true",
                    help="crop to the head and shoulders and sharpen before making block art: for pencil-sketch sets,"
                         " whose fine lines go soft at a few dozen cells")
-    p.add_argument("--blocks-mode", choices=["half", "quadrant"], default="half",
+    p.add_argument("--blocks-mode", choices=["half", "quadrant", "sextant"], default="half",
                    help="half: two stacked pixels per character (default); quadrant: 2 by 2 pixels per character,"
                         " about twice the horizontal detail at the same size (needs a font with the quadrant block glyphs)")
     a = p.parse_args()

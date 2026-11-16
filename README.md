@@ -179,6 +179,8 @@ draw-portrait --blocks-only emotes/nova --blocks 32 --blocks-mode quadrant --blo
 
 `--blocks-mode quadrant` puts 2 by 2 pixels in each character (the quadrant block glyphs, with the best two-colour split of each cell): about twice the horizontal detail at the same size, as long as the font has those glyphs. `--blocks-name` and `--blocks-states` write a smaller file with only some states, for a status-line face, say.
 
+`--blocks-mode sextant` puts 2 by 3 pixels in each character (the Unicode sextant glyphs, U+1FB00 and up): the same width and height in cells as `quadrant`, with half as much again vertical detail. It needs a font that has the Symbols for Legacy Computing block; Cascadia Mono in Windows Terminal does. pi-tui counts each sextant as one cell.
+
 The block art is made from the PNG frames, so it needs no image model. Frame names follow the files: `idle.png` is `default`, `idle_blink.png` is `blink`, and extra takes (`_v2`) are included.
 
 ### Without the script

@@ -15,6 +15,8 @@ All notable changes to pi-agent-portrait, and to pi-emote before it, are documen
 
 - **A mood board at the right of the widget.** With a Sixel portrait, the space folder's `board.sixel` (with `board.json`: width, height and the pin it was made from) is drawn as a fixed-size tile (a thumbnail, or a collage of several pins) at the right edge, level with the portrait, and stays there until the files change. The tile is encoded ahead of time (the Triveni `space.py` makes it from her latest pin), so the widget does no image work. It is drawn only when the terminal leaves the info rows at least 36 cells; narrower terminals keep the rows and show no board. The tile is part of the repaint mark, so changing it rewrites the block. See `boardLayout` and `boardPart` in `src/sixel.ts`. Both pictures are anchored to the widget's last row with save and restore cursor (DECSC and DECRC), not to wherever the terminal leaves the cursor after a Sixel, so the tile starts on the same row as the portrait even when the rows pi reserves differ from the rows the picture covers; the line ends with the cursor restored to that row.
 
+- **`--blocks-mode sextant`**: block art with 2 by 3 pixels per cell (Unicode sextants), for half as much again vertical detail at the same size as `quadrant`. CI checks it writes sextant glyphs.
+
 ### Changed
 - The text portrait canvas is at least 8 by 4 and takes the size of the frame when it is bigger; the info lines are centered beside a taller portrait.
 
